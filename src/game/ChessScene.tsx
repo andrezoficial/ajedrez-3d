@@ -754,7 +754,7 @@ function Stars() {
   );
 }
 
-/** Distant planet / eclipse body for depth and rim light */}
+/** Distant planet / eclipse body for depth and rim light */
 function CosmicBackdrop({ warm }: { warm: boolean }) {
   const planetRef = useRef<THREE.Mesh>(null);
   useFrame((state) => {
