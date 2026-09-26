@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { PieceType, Side } from "./chess";
 import type { Skin } from "./skins";
 
-function lathe(pairs: [number, number][], segments = 64) {
+function lathe(pairs: [number, number][], segments = 80) {
   const g = new THREE.LatheGeometry(
     pairs.map(([x, y]) => new THREE.Vector2(Math.max(0, x), y)),
     segments,
@@ -28,6 +28,8 @@ const BASE: [number, number][] = [
   [0.21, 0.122],
   [0.175, 0.14],
   [0.2, 0.158],
+  [0.183, 0.168],
+  [0.196, 0.172],
   [0.17, 0.175],
 ];
 
@@ -138,7 +140,7 @@ function knightHead() {
     [0.0, 0.0],
   ];
   const curve = new THREE.SplineCurve(outline.map(([x, y]) => new THREE.Vector2(x, y)));
-  const sampled = curve.getSpacedPoints(80);
+  const sampled = curve.getSpacedPoints(120);
   const shape = new THREE.Shape();
   shape.moveTo(sampled[0].x, sampled[0].y);
   for (let i = 1; i < sampled.length; i++) shape.lineTo(sampled[i].x, sampled[i].y);
@@ -148,8 +150,8 @@ function knightHead() {
     bevelEnabled: true,
     bevelThickness: 0.045,
     bevelSize: 0.04,
-    bevelSegments: 5,
-    curveSegments: 10,
+    bevelSegments: 7,
+    curveSegments: 16,
   });
   g.translate(-0.1, 0, -0.13);
   g.computeVertexNormals();
@@ -158,48 +160,48 @@ function knightHead() {
 
 const geos = {
   pawnBody: pawnBody(),
-  pawnHead: mark(new THREE.SphereGeometry(0.16, 32, 24), 0.64),
-  pawnCollar: mark(new THREE.TorusGeometry(0.165, 0.018, 12, 32), 0.165),
+  pawnHead: mark(new THREE.SphereGeometry(0.16, 40, 28), 0.64),
+  pawnCollar: mark(new THREE.TorusGeometry(0.165, 0.018, 14, 40), 0.165),
   rookBody: rookBody(),
-  rookCollar: mark(new THREE.TorusGeometry(0.168, 0.018, 12, 32), 0.165),
-  rookWell: mark(new THREE.CylinderGeometry(0.11, 0.11, 0.05, 24), 0.735),
+  rookCollar: mark(new THREE.TorusGeometry(0.168, 0.018, 14, 40), 0.165),
+  rookWell: mark(new THREE.CylinderGeometry(0.11, 0.11, 0.05, 32), 0.735),
   bishopBody: bishopBody(),
-  bishopCollar: mark(new THREE.TorusGeometry(0.162, 0.018, 12, 32), 0.165),
-  bishopFinial: mark(new THREE.SphereGeometry(0.05, 16, 12), 1.24),
+  bishopCollar: mark(new THREE.TorusGeometry(0.162, 0.018, 14, 40), 0.165),
+  bishopFinial: mark(new THREE.SphereGeometry(0.05, 22, 16), 1.24),
   bishopSlot: mark(new THREE.BoxGeometry(0.04, 0.28, 0.24), 1.02),
   queenBody: queenBody(),
-  queenCollar: mark(new THREE.TorusGeometry(0.166, 0.018, 12, 32), 0.165),
-  queenPearl: mark(new THREE.SphereGeometry(0.058, 16, 12), 1.24),
+  queenCollar: mark(new THREE.TorusGeometry(0.166, 0.018, 14, 40), 0.165),
+  queenPearl: mark(new THREE.SphereGeometry(0.058, 22, 16), 1.24),
   kingBody: kingBody(),
-  kingCollar: mark(new THREE.TorusGeometry(0.17, 0.018, 12, 32), 0.165),
+  kingCollar: mark(new THREE.TorusGeometry(0.17, 0.018, 14, 40), 0.165),
   kingStem: mark(new THREE.BoxGeometry(0.055, 0.26, 0.055), 1.46),
   kingBar: mark(new THREE.BoxGeometry(0.18, 0.055, 0.055), 1.5),
   knightBase: knightBase(),
-  knightCollar: mark(new THREE.TorusGeometry(0.165, 0.018, 12, 32), 0.175),
+  knightCollar: mark(new THREE.TorusGeometry(0.165, 0.018, 14, 40), 0.175),
   knightHead: knightHead(),
   knightEarL: (() => {
-    const g = new THREE.ConeGeometry(0.055, 0.18, 8);
+    const g = new THREE.ConeGeometry(0.055, 0.18, 12);
     g.rotateZ(0.4);
     g.translate(0.04, 1.1, 0.07);
     return g;
   })(),
   knightEarR: (() => {
-    const g = new THREE.ConeGeometry(0.055, 0.18, 8);
+    const g = new THREE.ConeGeometry(0.055, 0.18, 12);
     g.rotateZ(-0.15);
     g.translate(0.08, 1.08, -0.07);
     return g;
   })(),
-  knightEye: new THREE.SphereGeometry(0.028, 12, 8),
+  knightEye: new THREE.SphereGeometry(0.028, 16, 10),
   rookMerlon: new THREE.BoxGeometry(0.1, 0.2, 0.13),
 };
 
-const padGeo = new THREE.CylinderGeometry(0.26, 0.28, 0.025, 24);
+const padGeo = new THREE.CylinderGeometry(0.26, 0.28, 0.025, 32);
 const padMat = new THREE.MeshStandardMaterial({
   color: "#140f0c",
   roughness: 0.92,
   metalness: 0.05,
 });
-const queenSpikeGeo = new THREE.ConeGeometry(0.038, 0.14, 7);
+const queenSpikeGeo = new THREE.ConeGeometry(0.038, 0.14, 9);
 
 export type PieceMaterials = {
   body: THREE.MeshPhysicalMaterial;

@@ -1,8 +1,9 @@
-import { Settings, RotateCcw, Sparkles, Volume2, VolumeX, Sun, Moon } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { getGameStatus, getCurrentPhase, getPhaseTurnsLeft, materialOf } from "./chess";
+import { Settings, RotateCcw, Sparkles, Volume2, VolumeX, Sun, Moon, Copy, Check } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { getGameStatus, getCurrentPhase, getPhaseTurnsLeft, materialOf, type Side } from "./chess";
 import { SKINS, type SkinId } from "./skins";
-import { useGame } from "./store";
+import { useGame, type Mode } from "./store";
+import type { OnlineStatus } from "./online";
 
 export function GameHUD() {
   const state = useGame((s) => s.state);
@@ -14,6 +15,9 @@ export function GameHUD() {
   const thinking = useGame((s) => s.thinking);
   const toast = useGame((s) => s.toast);
   const selected = useGame((s) => s.selected);
+  const onlineRoom = useGame((s) => s.onlineRoom);
+  const onlineColor = useGame((s) => s.onlineColor);
+  const onlineStatus = useGame((s) => s.onlineStatus);
   const setMode = useGame((s) => s.setMode);
   const setDifficulty = useGame((s) => s.setDifficulty);
   const setSkin = useGame((s) => s.setSkin);
@@ -21,7 +25,19 @@ export function GameHUD() {
   const setPhases = useGame((s) => s.setPhases);
   const newGame = useGame((s) => s.newGame);
   const flipBoard = useGame((s) => s.flipBoard);
+  const startOnlineHost = useGame((s) => s.startOnlineHost);
+  const joinOnlineRoom = useGame((s) => s.joinOnlineRoom);
+  const returnToMenu = useGame((s) => s.returnToMenu);
   const [open, setOpen] = useState(false);
+  const [uiMode, setUiMode] = useState<Mode>(mode);
+  const [joinCode, setJoinCode] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  // Only follow the store's mode while not mid-setup for online (the select
+  // itself drives "online" locally until Host/Join actually connects).
+  useEffect(() => {
+    if (mode !== "online") setUiMode(mode);
+  }, [mode]);
 
   const status = getGameStatus(state);
   const sunMat = materialOf(state.board, "w");
@@ -30,11 +46,29 @@ export function GameHUD() {
   const phase = phases ? getCurrentPhase() : null;
   const sunActive = state.turn === "w" && !status.isOver;
   const moonActive = state.turn === "b" && !status.isOver;
+  const onlineLabel =
+    onlineStatus === "connected"
+      ? "En línea"
+      : onlineStatus === "waiting"
+        ? "Esperando…"
+        : onlineStatus === "connecting"
+          ? "Conectando…"
+          : onlineStatus === "disconnected"
+            ? "Desconectado"
+            : "En línea";
 
   let message = "Elige una pieza";
-  if (status.isOver) message = status.result;
-  else if (thinking) message = "La Luna piensa…";
+  if (mode === "online" && onlineStatus !== "connected") {
+    message =
+      onlineStatus === "waiting"
+        ? "Esperando al rival…"
+        : onlineStatus === "disconnected"
+          ? "Rival desconectado"
+          : "Conectando…";
+  } else if (status.isOver) message = status.result;
+  else if (mode === "ai" && thinking) message = "La Luna piensa…";
   else if (status.inCheck) message = state.turn === "w" ? "Jaque al Sol" : "Jaque a la Luna";
+  else if (mode === "online" && state.turn !== onlineColor) message = "Turno del rival";
   else if (selected !== null) message = "Elige el destino";
 
   return (
@@ -66,7 +100,7 @@ export function GameHUD() {
         </div>
         <PlayerBadge
           name="Luna Noir"
-          tag={mode === "ai" ? "IA" : "SOMBRA"}
+          tag={mode === "ai" ? "IA" : mode === "online" ? onlineLabel.toUpperCase() : "SOMBRA"}
           material={moonMat}
           active={moonActive}
           faction="luna"
@@ -115,6 +149,52 @@ export function GameHUD() {
               className="mt-5 h-11 w-full rounded-md bg-accent text-sm font-medium text-accent-fg"
             >
               Nueva partida
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === "online" && (onlineStatus === "connecting" || onlineStatus === "waiting") && (
+        <div className="absolute inset-0 z-20 grid place-items-center bg-bg/70 px-4">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-bg-elevated p-6 text-center shadow-[0_24px_80px_rgb(0_0_0/0.45)]">
+            <p className="font-sans text-[10px] tracking-[0.2em] text-fg-subtle uppercase">
+              {onlineStatus === "connecting" ? "Conectando" : "Sala creada"}
+            </p>
+            {onlineRoom && (
+              <>
+                <p className="font-display mt-2 text-4xl font-semibold tracking-[0.35em] text-fg">
+                  {onlineRoom}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(onlineRoom).then(() => {
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1500);
+                    });
+                  }}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border bg-bg px-3 py-1.5 font-sans text-xs text-fg-muted"
+                >
+                  {copied ? (
+                    <Check className="size-3.5" strokeWidth={1.75} />
+                  ) : (
+                    <Copy className="size-3.5" strokeWidth={1.75} />
+                  )}
+                  {copied ? "Copiado" : "Copiar código"}
+                </button>
+              </>
+            )}
+            <p className="mt-4 font-sans text-xs text-fg-muted">
+              {onlineStatus === "connecting"
+                ? "Buscando la sala…"
+                : "Comparte el código para que tu rival se una."}
+            </p>
+            <button
+              type="button"
+              onClick={returnToMenu}
+              className="mt-5 h-10 w-full rounded-md border border-border bg-bg text-sm text-fg-muted"
+            >
+              Cancelar
             </button>
           </div>
         </div>
@@ -179,25 +259,60 @@ export function GameHUD() {
             <div className="space-y-3 rounded-lg border border-border bg-bg-subtle/50 p-3">
               <Field label="Modo de partida">
                 <select
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value as "ai" | "pvp")}
+                  value={uiMode}
+                  onChange={(e) => {
+                    const next = e.target.value as Mode;
+                    setUiMode(next);
+                    if (next !== "online") setMode(next);
+                  }}
                   className="mt-1.5 h-11 w-full rounded-md border border-border bg-bg px-3 text-sm text-fg outline-none"
                 >
                   <option value="ai">Contra la IA</option>
                   <option value="pvp">Dos jugadores</option>
+                  <option value="online">En línea</option>
                 </select>
               </Field>
-              <Field label="Dificultad">
-                <select
-                  value={difficulty}
-                  onChange={(e) => setDifficulty(Number(e.target.value))}
-                  className="mt-1.5 h-11 w-full rounded-md border border-border bg-bg px-3 text-sm text-fg outline-none"
-                >
-                  <option value={1}>Fácil</option>
-                  <option value={2}>Media</option>
-                  <option value={3}>Difícil</option>
-                </select>
-              </Field>
+              {uiMode === "ai" && (
+                <Field label="Dificultad">
+                  <select
+                    value={difficulty}
+                    onChange={(e) => setDifficulty(Number(e.target.value))}
+                    className="mt-1.5 h-11 w-full rounded-md border border-border bg-bg px-3 text-sm text-fg outline-none"
+                  >
+                    <option value={1}>Fácil</option>
+                    <option value={2}>Media</option>
+                    <option value={3}>Difícil</option>
+                  </select>
+                </Field>
+              )}
+              {uiMode === "online" && (
+                <OnlinePanel
+                  connected={mode === "online"}
+                  onlineRoom={onlineRoom}
+                  onlineColor={onlineColor}
+                  onlineStatus={onlineStatus}
+                  joinCode={joinCode}
+                  setJoinCode={setJoinCode}
+                  copied={copied}
+                  onHost={() => {
+                    startOnlineHost();
+                  }}
+                  onJoin={() => {
+                    if (joinCode.trim()) joinOnlineRoom(joinCode);
+                  }}
+                  onCopy={() => {
+                    if (!onlineRoom) return;
+                    navigator.clipboard?.writeText(onlineRoom).then(() => {
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 1500);
+                    });
+                  }}
+                  onLeave={() => {
+                    returnToMenu();
+                    setJoinCode("");
+                  }}
+                />
+              )}
             </div>
 
             <div className="mt-3 space-y-3 rounded-lg border border-border bg-bg-subtle/50 p-3">
@@ -243,10 +358,126 @@ export function GameHUD() {
             >
               Listo
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                returnToMenu();
+              }}
+              className="mt-3 w-full text-center font-sans text-[11px] text-fg-subtle hover:text-fg-muted"
+            >
+              Volver al menú principal
+            </button>
           </aside>
         </div>
       )}
     </>
+  );
+}
+
+function OnlinePanel({
+  connected,
+  onlineRoom,
+  onlineColor,
+  onlineStatus,
+  joinCode,
+  setJoinCode,
+  copied,
+  onHost,
+  onJoin,
+  onCopy,
+  onLeave,
+}: {
+  connected: boolean;
+  onlineRoom: string | null;
+  onlineColor: Side | null;
+  onlineStatus: OnlineStatus;
+  joinCode: string;
+  setJoinCode: (v: string) => void;
+  copied: boolean;
+  onHost: () => void;
+  onJoin: () => void;
+  onCopy: () => void;
+  onLeave: () => void;
+}) {
+  if (!connected) {
+    return (
+      <div className="space-y-2 rounded-lg border border-border bg-bg p-3">
+        <button
+          type="button"
+          onClick={onHost}
+          className="h-10 w-full rounded-md bg-accent text-sm font-medium text-accent-fg"
+        >
+          Crear sala
+        </button>
+        <div className="flex items-center gap-1 px-1">
+          <span className="h-px flex-1 bg-border" />
+          <span className="font-sans text-[10px] tracking-wide text-fg-subtle uppercase">o</span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+            placeholder="Código de sala"
+            maxLength={6}
+            className="h-10 min-w-0 flex-1 rounded-md border border-border bg-bg-subtle px-3 font-mono text-sm tracking-[0.2em] text-fg outline-none placeholder:font-sans placeholder:tracking-normal placeholder:text-fg-subtle"
+          />
+          <button
+            type="button"
+            disabled={!joinCode.trim()}
+            onClick={onJoin}
+            className="h-10 shrink-0 rounded-md border border-border-strong bg-bg-elevated px-4 text-sm font-medium text-fg disabled:opacity-40"
+          >
+            Unirse
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const statusLabel =
+    onlineStatus === "connected"
+      ? "Rival conectado"
+      : onlineStatus === "waiting"
+        ? "Esperando al rival…"
+        : onlineStatus === "disconnected"
+          ? "Rival desconectado"
+          : "Conectando…";
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-bg p-3">
+      <div>
+        <p className="font-sans text-[11px] text-fg-muted">Código de sala — compártelo</p>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <p className="font-mono text-2xl font-semibold tracking-[0.35em] text-fg">{onlineRoom}</p>
+          <button
+            type="button"
+            onClick={onCopy}
+            aria-label="Copiar código"
+            className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-bg-elevated text-fg-muted"
+          >
+            {copied ? <Check className="size-4" strokeWidth={1.75} /> : <Copy className="size-4" strokeWidth={1.75} />}
+          </button>
+        </div>
+      </div>
+      <p className="flex items-center gap-2 font-sans text-[11px] text-fg-muted">
+        <span
+          className={[
+            "size-1.5 rounded-full",
+            onlineStatus === "connected" ? "bg-accent" : "bg-fg-subtle",
+          ].join(" ")}
+        />
+        {statusLabel} · juegas con el {onlineColor === "w" ? "Sol" : "Luna"}
+      </p>
+      <button
+        type="button"
+        onClick={onLeave}
+        className="h-9 w-full rounded-md border border-border bg-bg-elevated text-xs text-fg-muted"
+      >
+        Salir de la sala
+      </button>
+    </div>
   );
 }
 
