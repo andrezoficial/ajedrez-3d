@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ContactShadows, OrbitControls, useGLTF } from "@react-three/drei";
+import { ContactShadows, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { fileOf, rankOf, squareIndex, type PieceCode, type PieceType, type Side } from "./chess";
@@ -9,7 +9,6 @@ import { SKINS, type Skin, type SkinId } from "./skins";
 import { useGame } from "./store";
 
 const pointerGuard = { downX: 0, downY: 0, moved: false };
-useGLTF.preload("/models/rey-sol.glb");
 
 /** True if the pointer barely moved since pointerdown (click, not drag).
  * NOTE: we intentionally do NOT rely on OrbitControls' start/end events here —
@@ -513,9 +512,6 @@ function Pieces({ skin }: { skin: Skin }) {
   const selected = useGame((s) => s.selected);
   const lastCapture = useGame((s) => s.lastCapture);
 
-  // Rey del Sol — modelo GLB dorado angelical
-  const { scene: reySolScene } = useGLTF("/models/rey-sol.glb");
-
   const mats = useMemo(
     () => ({
       w: createMaterials(skin, "w"),
@@ -529,31 +525,11 @@ function Pieces({ skin }: { skin: Skin }) {
     const map: Record<string, THREE.Group> = {};
     for (const side of ["w", "b"] as Side[]) {
       for (const type of types) {
-        if (side === "w" && type === "K") {
-          // Rey del Sol = modelo 3D personalizado
-          const g = new THREE.Group();
-          const model = reySolScene.clone(true);
-          model.traverse((o) => {
-            if ((o as THREE.Mesh).isMesh) {
-              o.castShadow = true;
-              o.receiveShadow = true;
-            }
-          });
-          // Ajusta escala/altura/rotación si el modelo se ve desproporcionado
-          model.scale.setScalar(0.45);
-          model.position.y = 0.05;
-          model.rotation.y = Math.PI; // mira hacia el adversario (igual que piezas blancas)
-          g.add(model);
-          g.userData.pieceType = "K";
-          g.userData.side = "w";
-          map["wK"] = g;
-        } else {
-          map[`${side}${type}`] = createPieceMesh(type, side, mats[side]);
-        }
+        map[`${side}${type}`] = createPieceMesh(type, side, mats[side]);
       }
     }
     return map;
-  }, [mats, reySolScene]);
+  }, [mats]);
 
   const entities = useMemo(() => boardToEntities(board), [board]);
   const clones = useMemo(
@@ -855,7 +831,6 @@ function SceneRig() {
       : "moon"
     : null;
   const warm = phase === "sun" || (!phase && turn === "w");
-  const group = useRef<THREE.Group>(null);
   const { scene } = useThree();
 
   useEffect(() => {
@@ -867,11 +842,9 @@ function SceneRig() {
     };
   }, [scene, warm]);
 
-  useFrame((state) => {
-    if (!group.current) return;
-    const sway = Math.sin(state.clock.elapsedTime * 0.15) * 0.012;
-    group.current.rotation.y = (flipped ? Math.PI : 0) + sway;
-  });
+  // Camera default azimuth for [5.4, 6.6, 7.2] looking at [0, 0.15, 0].
+  const baseAzimuth = Math.atan2(5.4, 7.2);
+  const azimuthSwing = 0.85; // ~49° either side — enough to inspect the board, not a full spin
 
   return (
     <>
@@ -880,7 +853,8 @@ function SceneRig() {
       <Lighting skin={skin} turn={turn} phase={phase} />
       <Stars />
       <CosmicBackdrop warm={warm} />
-      <group ref={group}>
+      {/* Static rotation — only flips 180° for the opposing player's view, no idle sway */}
+      <group rotation={[0, flipped ? Math.PI : 0, 0]}>
         <Board skin={skin} />
         <Pieces skin={skin} />
         <Highlights />
@@ -897,11 +871,13 @@ function SceneRig() {
         makeDefault
         enablePan={false}
         enableDamping
-        dampingFactor={0.08}
-        minDistance={6}
-        maxDistance={16}
-        minPolarAngle={0.35}
-        maxPolarAngle={1.25}
+        dampingFactor={0.12}
+        minDistance={7.5}
+        maxDistance={11.5}
+        minPolarAngle={0.55}
+        maxPolarAngle={1.05}
+        minAzimuthAngle={baseAzimuth - azimuthSwing}
+        maxAzimuthAngle={baseAzimuth + azimuthSwing}
         target={[0, 0.15, 0]}
         // Left drag rotates; clicks still reach pieces/tiles
         mouseButtons={{ LEFT: 0, MIDDLE: 1, RIGHT: 2 }}

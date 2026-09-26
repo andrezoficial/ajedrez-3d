@@ -268,8 +268,8 @@ export function createPieceMesh(type: PieceType, side: Side, mats: PieceMaterial
     g.add(mesh(geos.rookBody, mats.body));
     g.add(mesh(geos.rookCollar, mats.accent));
     g.add(mesh(geos.rookWell, mats.slot));
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
       const m = mesh(geos.rookMerlon, mats.body);
       m.position.set(Math.cos(a) * 0.185, 0.8, Math.sin(a) * 0.185);
       m.rotation.y = -a;
