@@ -8,15 +8,31 @@ import { createMaterials, createPieceMesh, squareToPosition } from "./pieces";
 import { SKINS, type Skin, type SkinId } from "./skins";
 import { useGame } from "./store";
 
-const pointerGuard = { downX: 0, downY: 0, orbiting: false };
+const pointerGuard = { downX: 0, downY: 0, moved: false };
 useGLTF.preload("/models/rey-sol.glb");
 
-
+/** True if the pointer barely moved since pointerdown (click, not drag).
+ * NOTE: we intentionally do NOT rely on OrbitControls' start/end events here —
+ * OrbitControls fires "start" immediately on pointerdown (before any actual
+ * drag), so gating on that flag made every click look like an orbit and
+ * pieces became unclickable. We track real pointer movement instead. */
 function isTap(clientX: number, clientY: number) {
-  if (pointerGuard.orbiting) return false;
+  if (pointerGuard.moved) return false;
   const dx = clientX - pointerGuard.downX;
   const dy = clientY - pointerGuard.downY;
-  return dx * dx + dy * dy < 64;
+  return dx * dx + dy * dy < 144;
+}
+
+function markPointerDown(clientX: number, clientY: number) {
+  pointerGuard.downX = clientX;
+  pointerGuard.downY = clientY;
+  pointerGuard.moved = false;
+}
+
+function markPointerMove(clientX: number, clientY: number) {
+  const dx = clientX - pointerGuard.downX;
+  const dy = clientY - pointerGuard.downY;
+  if (dx * dx + dy * dy >= 144) pointerGuard.moved = true;
 }
 
 function noRaycast() {}
@@ -341,6 +357,10 @@ function Board({ skin }: { skin: Skin }) {
             key={i}
             position={[file - 3.5, 0, rank - 3.5]}
             receiveShadow
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              markPointerDown(e.clientX, e.clientY);
+            }}
             onClick={(e) => {
               e.stopPropagation();
               if (!isTap(e.clientX, e.clientY)) return;
@@ -474,6 +494,10 @@ function PieceView({
       ref={group}
       object={object}
       position={[start.x, start.y, start.z]}
+      onPointerDown={(e: { stopPropagation: () => void; clientX: number; clientY: number }) => {
+        e.stopPropagation();
+        markPointerDown(e.clientX, e.clientY);
+      }}
       onClick={(e: { stopPropagation: () => void; clientX: number; clientY: number }) => {
         e.stopPropagation();
         if (!isTap(e.clientX, e.clientY)) return;
@@ -688,6 +712,10 @@ function Highlights() {
             key={m.to}
             position={[p.x, p.y, p.z]}
             rotation={[-Math.PI / 2, 0, 0]}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              markPointerDown(e.clientX, e.clientY);
+            }}
             onClick={(e) => {
               e.stopPropagation();
               if (!isTap(e.clientX, e.clientY)) return;
@@ -875,14 +903,8 @@ function SceneRig() {
         minPolarAngle={0.35}
         maxPolarAngle={1.25}
         target={[0, 0.15, 0]}
-        onStart={() => {
-          pointerGuard.orbiting = true;
-        }}
-        onEnd={() => {
-          window.setTimeout(() => {
-            pointerGuard.orbiting = false;
-          }, 50);
-        }}
+        // Left drag rotates; clicks still reach pieces/tiles
+        mouseButtons={{ LEFT: 0, MIDDLE: 1, RIGHT: 2 }}
       />
     </>
   );
@@ -897,8 +919,11 @@ export function ChessCanvas() {
       gl={{ antialias: true, alpha: false }}
       style={{ width: "100%", height: "100%", touchAction: "none" }}
       onPointerDown={(e) => {
-        pointerGuard.downX = e.clientX;
-        pointerGuard.downY = e.clientY;
+        markPointerDown(e.clientX, e.clientY);
+      }}
+      onPointerMove={(e) => {
+        // Only track while a button is held (primary button)
+        if (e.buttons & 1) markPointerMove(e.clientX, e.clientY);
       }}
       onPointerMissed={(e) => {
         if (!isTap(e.clientX, e.clientY)) return;
