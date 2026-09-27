@@ -1,4 +1,4 @@
-import { Settings, RotateCcw, Sparkles, Volume2, VolumeX, Sun, Moon, Copy, Check } from "lucide-react";
+import { Settings, RotateCcw, Sparkles, Volume2, VolumeX, Sun, Moon, Copy, Check, Home } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { getGameStatus, getCurrentPhase, getPhaseTurnsLeft, materialOf, type Side } from "./chess";
 import { SKINS, type SkinId } from "./skins";
@@ -84,10 +84,10 @@ export function GameHUD() {
         />
         <div className="min-w-0 pt-1 text-center">
           <p className="font-sans text-[10px] font-medium tracking-[0.22em] text-fg-subtle uppercase">
-            Ajedrez 3D
+            Sol y Luna
           </p>
           <h1 className="font-display text-lg leading-tight font-semibold tracking-tight text-fg sm:text-2xl">
-            Eclipse Eterno
+            Ajedrez 3D
           </h1>
           <p className="mt-0.5 font-sans text-[11px] text-fg-muted">
             {status.isOver
@@ -219,6 +219,9 @@ export function GameHUD() {
           </Chip>
         </div>
         <nav className="pointer-events-auto mx-auto flex items-center gap-2">
+          <IconBtn label="Menú" onClick={returnToMenu}>
+            <Home className="size-4" strokeWidth={1.75} />
+          </IconBtn>
           <IconBtn label="Ajustes" onClick={() => setOpen(true)}>
             <Settings className="size-4" strokeWidth={1.75} />
           </IconBtn>
@@ -243,7 +246,7 @@ export function GameHUD() {
             <div className="mb-4 flex items-start justify-between">
               <div>
                 <p className="font-sans text-[10px] tracking-[0.2em] text-fg-subtle uppercase">
-                  Eclipse eterno
+                  Ajedrez 3D
                 </p>
                 <h2 className="font-display text-2xl font-semibold text-fg">Ajustes</h2>
               </div>

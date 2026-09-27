@@ -16,21 +16,20 @@ function mark(geo: THREE.BufferGeometry, y = 0) {
   return geo;
 }
 
-/** Shared Staunton plinth — wide foot, two collars */
+/** Shared Staunton plinth — one clean chamfer + a gentle taper up to the
+ * collar ring (added separately as a torus mesh per piece). Fewer direction
+ * changes than before so the silhouette reads as crisp and deliberate
+ * instead of a busy stack of tiny steps competing with the collar above it. */
 const BASE: [number, number][] = [
   [0.0, 0.0],
-  [0.32, 0.0],
-  [0.32, 0.03],
-  [0.29, 0.044],
-  [0.22, 0.058],
-  [0.205, 0.085],
-  [0.25, 0.105],
-  [0.21, 0.122],
-  [0.175, 0.14],
-  [0.2, 0.158],
-  [0.183, 0.168],
-  [0.196, 0.172],
-  [0.17, 0.175],
+  [0.33, 0.0],
+  [0.33, 0.026],
+  [0.27, 0.052],
+  [0.215, 0.08],
+  [0.185, 0.11],
+  [0.174, 0.145],
+  [0.178, 0.162],
+  [0.165, 0.175],
 ];
 
 function pawnBody() {
@@ -114,46 +113,48 @@ function knightBase() {
   ]);
 }
 
+/** Horse-head profile, traced from the throat up the jaw to a pointed
+ * muzzle, over a notched nostril and brow to the poll, then back down one
+ * clean crest curve (the mane) to the throat again. Kept to a handful of
+ * widely-spaced points — a spline through cramped points rounds off into a
+ * blob, so every landmark (chin, muzzle, nostril, brow, crest) gets enough
+ * room to actually read as that feature. Proportioned so the poll sits
+ * comfortably below the king/queen finials. */
 function knightHead() {
   const outline: [number, number][] = [
-    [0.0, 0.0],
-    [0.08, 0.06],
-    [0.12, 0.18],
-    [0.1, 0.34],
-    [0.18, 0.44],
-    [0.34, 0.42],
-    [0.48, 0.46],
-    [0.56, 0.54],
-    [0.54, 0.64],
-    [0.44, 0.7],
-    [0.28, 0.72],
-    [0.22, 0.82],
-    [0.26, 1.02],
-    [0.18, 1.14],
-    [0.06, 1.06],
-    [0.1, 0.88],
-    [0.02, 0.72],
-    [-0.1, 0.6],
-    [-0.16, 0.42],
-    [-0.12, 0.2],
-    [-0.04, 0.06],
+    [0.0, 0.0], // throat, meets the base
+    [0.11, 0.015], // jaw underside
+    [0.22, 0.02], // mouth, closed line
+    [0.34, 0.1], // rising to the upper lip
+    [0.46, 0.2], // muzzle
+    [0.52, 0.3], // nose tip
+    [0.4, 0.38], // under the nostril (concave notch)
+    [0.32, 0.5], // nose bridge rising
+    [0.36, 0.6], // brow ridge (eye socket)
+    [0.22, 0.7], // forehead top
+    [0.02, 0.74], // poll crown (ears sit just above here)
+    [-0.1, 0.68], // nape, back of poll
+    [-0.18, 0.52], // crest of the neck (mane)
+    [-0.14, 0.32], // crest narrows back in
+    [-0.07, 0.14], // flares toward the collar
+    [-0.02, 0.04], // back to the throat
     [0.0, 0.0],
   ];
   const curve = new THREE.SplineCurve(outline.map(([x, y]) => new THREE.Vector2(x, y)));
-  const sampled = curve.getSpacedPoints(120);
+  const sampled = curve.getSpacedPoints(160);
   const shape = new THREE.Shape();
   shape.moveTo(sampled[0].x, sampled[0].y);
   for (let i = 1; i < sampled.length; i++) shape.lineTo(sampled[i].x, sampled[i].y);
   shape.closePath();
   const g = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.26,
+    depth: 0.2,
     bevelEnabled: true,
-    bevelThickness: 0.045,
-    bevelSize: 0.04,
-    bevelSegments: 7,
-    curveSegments: 16,
+    bevelThickness: 0.028,
+    bevelSize: 0.024,
+    bevelSegments: 6,
+    curveSegments: 20,
   });
-  g.translate(-0.1, 0, -0.13);
+  g.translate(-0.15, 0, -0.1);
   g.computeVertexNormals();
   return g;
 }
@@ -161,38 +162,46 @@ function knightHead() {
 const geos = {
   pawnBody: pawnBody(),
   pawnHead: mark(new THREE.SphereGeometry(0.16, 40, 28), 0.64),
-  pawnCollar: mark(new THREE.TorusGeometry(0.165, 0.018, 14, 40), 0.165),
+  pawnCollar: mark(new THREE.TorusGeometry(0.165, 0.018, 28, 48), 0.165),
   rookBody: rookBody(),
-  rookCollar: mark(new THREE.TorusGeometry(0.168, 0.018, 14, 40), 0.165),
+  rookCollar: mark(new THREE.TorusGeometry(0.168, 0.018, 28, 48), 0.165),
   rookWell: mark(new THREE.CylinderGeometry(0.11, 0.11, 0.05, 32), 0.735),
   bishopBody: bishopBody(),
-  bishopCollar: mark(new THREE.TorusGeometry(0.162, 0.018, 14, 40), 0.165),
-  bishopFinial: mark(new THREE.SphereGeometry(0.05, 22, 16), 1.24),
+  bishopCollar: mark(new THREE.TorusGeometry(0.162, 0.018, 28, 48), 0.165),
+  bishopFinial: mark(new THREE.SphereGeometry(0.05, 24, 18), 1.24),
   bishopSlot: mark(new THREE.BoxGeometry(0.04, 0.28, 0.24), 1.02),
   queenBody: queenBody(),
-  queenCollar: mark(new THREE.TorusGeometry(0.166, 0.018, 14, 40), 0.165),
-  queenPearl: mark(new THREE.SphereGeometry(0.058, 22, 16), 1.24),
+  queenCollar: mark(new THREE.TorusGeometry(0.166, 0.018, 28, 48), 0.165),
+  queenPearl: mark(new THREE.SphereGeometry(0.058, 24, 18), 1.24),
   kingBody: kingBody(),
-  kingCollar: mark(new THREE.TorusGeometry(0.17, 0.018, 14, 40), 0.165),
+  kingCollar: mark(new THREE.TorusGeometry(0.17, 0.018, 28, 48), 0.165),
   kingStem: mark(new THREE.BoxGeometry(0.055, 0.26, 0.055), 1.46),
   kingBar: mark(new THREE.BoxGeometry(0.18, 0.055, 0.055), 1.5),
   knightBase: knightBase(),
-  knightCollar: mark(new THREE.TorusGeometry(0.165, 0.018, 14, 40), 0.175),
+  knightCollar: mark(new THREE.TorusGeometry(0.165, 0.018, 28, 48), 0.175),
   knightHead: knightHead(),
   knightEarL: (() => {
-    const g = new THREE.ConeGeometry(0.055, 0.18, 12);
-    g.rotateZ(0.4);
-    g.translate(0.04, 1.1, 0.07);
+    const g = new THREE.ConeGeometry(0.042, 0.17, 14);
+    g.rotateZ(0.3);
+    g.rotateX(-0.24);
+    g.translate(-0.08, 0.8, 0.06);
     return g;
   })(),
   knightEarR: (() => {
-    const g = new THREE.ConeGeometry(0.055, 0.18, 12);
-    g.rotateZ(-0.15);
-    g.translate(0.08, 1.08, -0.07);
+    const g = new THREE.ConeGeometry(0.042, 0.17, 14);
+    g.rotateZ(0.16);
+    g.rotateX(0.3);
+    g.translate(-0.05, 0.795, -0.06);
     return g;
   })(),
-  knightEye: new THREE.SphereGeometry(0.028, 16, 10),
-  rookMerlon: new THREE.BoxGeometry(0.1, 0.2, 0.13),
+  knightEye: new THREE.SphereGeometry(0.024, 16, 10),
+  // Slightly tapered prism (not a flat-sided cube) for a more finished,
+  // deliberately-crafted crenellation instead of a plain blocky box.
+  rookMerlon: (() => {
+    const g = new THREE.CylinderGeometry(0.052, 0.06, 0.2, 4, 1);
+    g.rotateY(Math.PI / 4);
+    return g;
+  })(),
 };
 
 const padGeo = new THREE.CylinderGeometry(0.26, 0.28, 0.025, 32);
@@ -211,28 +220,28 @@ export type PieceMaterials = {
 
 export function createMaterials(skin: Skin, side: Side): PieceMaterials {
   const isSun = side === "w";
-  const color = isSun ? skin.sunColor : skin.moonColor;
-  const accent = isSun ? skin.sunAccent : skin.moonAccent;
-  const emissive = isSun ? skin.sunEmissive : skin.moonEmissive;
+  const color = isSun ? skin.sunColor : skin.pieceDarkColor;
+  const accent = isSun ? skin.sunAccent : skin.pieceDarkAccent;
+  const emissive = isSun ? skin.sunEmissive : skin.pieceDarkEmissive;
   const body = new THREE.MeshPhysicalMaterial({
     color,
-    metalness: 0.68,
-    roughness: 0.36,
-    clearcoat: 0.32,
-    clearcoatRoughness: 0.28,
+    metalness: 0.72,
+    roughness: 0.3,
+    clearcoat: 0.4,
+    clearcoatRoughness: 0.22,
     emissive,
     emissiveIntensity: 0.04,
-    envMapIntensity: 0.65,
+    envMapIntensity: 0.85,
   });
   const acc = new THREE.MeshPhysicalMaterial({
     color: accent,
-    metalness: 0.78,
-    roughness: 0.24,
-    clearcoat: 0.45,
-    clearcoatRoughness: 0.18,
+    metalness: 0.8,
+    roughness: 0.18,
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.14,
     emissive,
     emissiveIntensity: 0.08,
-    envMapIntensity: 0.8,
+    envMapIntensity: 1,
   });
   const slot = new THREE.MeshPhysicalMaterial({
     color: isSun ? "#5a3d14" : "#1a1e28",
@@ -303,9 +312,9 @@ export function createPieceMesh(type: PieceType, side: Side, mats: PieceMaterial
     headGroup.add(mesh(geos.knightEarL, mats.body));
     headGroup.add(mesh(geos.knightEarR, mats.body));
     const eye = mesh(geos.knightEye, mats.accent);
-    eye.position.set(0.32, 0.68, 0.12);
+    eye.position.set(0.07, 0.6, 0.11);
     headGroup.add(eye);
-    headGroup.position.set(0, 0.36, 0);
+    headGroup.position.set(0, 0.35, 0);
     headGroup.rotation.y = Math.PI / 2;
     g.add(headGroup);
   }

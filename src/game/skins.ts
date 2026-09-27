@@ -9,6 +9,12 @@ export type Skin = {
   moonColor: string;
   moonAccent: string;
   moonEmissive: string;
+  /** Black pieces always render true black/graphite, independent of the
+   * moon-phase lighting colors above (which stay silvery/violet so the
+   * scene lighting still looks good during black's turn). */
+  pieceDarkColor: string;
+  pieceDarkAccent: string;
+  pieceDarkEmissive: string;
   tileLight: string;
   tileDark: string;
   veinLight: string;
@@ -20,13 +26,16 @@ export type Skin = {
 export const SKINS: Record<SkinId, Skin> = {
   gold_silver: {
     id: "gold_silver",
-    label: "Sol dorado · Luna plateada",
+    label: "Sol dorado · Luna negra",
     sunColor: "#e6c37a",
     sunAccent: "#fff1c2",
     sunEmissive: "#7a4e12",
     moonColor: "#c5ccd8",
     moonAccent: "#eef3ff",
     moonEmissive: "#2a3348",
+    pieceDarkColor: "#141414",
+    pieceDarkAccent: "#2e2e2e",
+    pieceDarkEmissive: "#050505",
     tileLight: "#c4ae86",
     tileDark: "#2a211c",
     veinLight: "#c4a574",
@@ -43,6 +52,9 @@ export const SKINS: Record<SkinId, Skin> = {
     moonColor: "#3a3544",
     moonAccent: "#b9a6e0",
     moonEmissive: "#2a1638",
+    pieceDarkColor: "#0c0c0e",
+    pieceDarkAccent: "#242428",
+    pieceDarkEmissive: "#020203",
     tileLight: "#e2c9a4",
     tileDark: "#141018",
     veinLight: "#b5651d",

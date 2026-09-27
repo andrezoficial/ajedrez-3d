@@ -23,10 +23,10 @@ export function StartMenu() {
             <Moon className="size-7 text-luna" strokeWidth={1.5} />
           </div>
           <p className="font-sans text-[10px] font-medium tracking-[0.32em] text-fg-subtle uppercase">
-            Ajedrez 3D
+            Sol y Luna
           </p>
           <h1 className="font-display text-4xl leading-tight font-semibold tracking-tight text-fg">
-            Eclipse Eterno
+            Ajedrez 3D
           </h1>
           <p className="mt-2 font-sans text-[13px] text-fg-muted">
             El Sol y la Luna se disputan el tablero astral.
