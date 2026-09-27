@@ -113,49 +113,58 @@ function knightBase() {
   ]);
 }
 
-/** Horse-head profile, traced from the throat up the jaw to a pointed
- * muzzle, over a notched nostril and brow to the poll, then back down one
- * clean crest curve (the mane) to the throat again. Kept to a handful of
- * widely-spaced points — a spline through cramped points rounds off into a
- * blob, so every landmark (chin, muzzle, nostril, brow, crest) gets enough
- * room to actually read as that feature. Proportioned so the poll sits
- * comfortably below the king/queen finials. */
-function knightHead() {
-  const outline: [number, number][] = [
-    [0.0, 0.0], // throat, meets the base
-    [0.11, 0.015], // jaw underside
-    [0.22, 0.02], // mouth, closed line
-    [0.34, 0.1], // rising to the upper lip
-    [0.46, 0.2], // muzzle
-    [0.52, 0.3], // nose tip
-    [0.4, 0.38], // under the nostril (concave notch)
-    [0.32, 0.5], // nose bridge rising
-    [0.36, 0.6], // brow ridge (eye socket)
-    [0.22, 0.7], // forehead top
-    [0.02, 0.74], // poll crown (ears sit just above here)
-    [-0.1, 0.68], // nape, back of poll
-    [-0.18, 0.52], // crest of the neck (mane)
-    [-0.14, 0.32], // crest narrows back in
-    [-0.07, 0.14], // flares toward the collar
-    [-0.02, 0.04], // back to the throat
-    [0.0, 0.0],
-  ];
-  const curve = new THREE.SplineCurve(outline.map(([x, y]) => new THREE.Vector2(x, y)));
-  const sampled = curve.getSpacedPoints(160);
-  const shape = new THREE.Shape();
-  shape.moveTo(sampled[0].x, sampled[0].y);
-  for (let i = 1; i < sampled.length; i++) shape.lineTo(sampled[i].x, sampled[i].y);
-  shape.closePath();
-  const g = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.2,
-    bevelEnabled: true,
-    bevelThickness: 0.028,
-    bevelSize: 0.024,
-    bevelSegments: 6,
-    curveSegments: 20,
-  });
-  g.translate(-0.15, 0, -0.1);
-  g.computeVertexNormals();
+/** The knight head is built from solid 3D volumes (neck, cranium, muzzle,
+ * jaw, ears) instead of a flat extruded profile. A flat profile only reads
+ * as a horse from the one exact side angle it was drawn for — from the
+ * board's tilted-down camera you mostly see its thin edge, which is why it
+ * used to look like a shapeless blob. Real volume reads correctly from any
+ * angle. "Forward" (the nose direction) is +X; the two ears/eyes split
+ * across +Z/-Z. */
+function knightNeck() {
+  const g = new THREE.CylinderGeometry(0.105, 0.15, 0.34, 24, 1);
+  g.translate(0, 0.17, 0); // base at the local origin, top at y=0.34
+  g.rotateZ(-0.3); // lean the top forward, arching toward the head
+  return g;
+}
+
+function knightCranium() {
+  const g = new THREE.SphereGeometry(0.145, 26, 20);
+  g.scale(1.05, 0.95, 0.8); // slightly elongated, a touch flattened side-to-side
+  g.translate(0.16, 0.43, 0);
+  return g;
+}
+
+function knightMuzzle() {
+  // Tapered tube: wide end (0.105) attaches at the cranium, narrow end
+  // (0.04) is the nose tip.
+  const g = new THREE.CylinderGeometry(0.04, 0.105, 0.34, 22, 1);
+  g.rotateZ(-Math.PI / 2); // swing the cylinder's axis to point forward (+X)
+  g.translate(0.47, 0.4, 0);
+  return g;
+}
+
+function knightJaw() {
+  const g = new THREE.SphereGeometry(0.09, 18, 14);
+  g.scale(1.15, 0.62, 0.85);
+  g.translate(0.24, 0.31, 0);
+  return g;
+}
+
+function knightMane() {
+  // A thin fin along the crest of the neck — just enough to suggest a mane
+  // without turning into visual clutter on a small piece.
+  const g = new THREE.SphereGeometry(0.1, 18, 12);
+  g.scale(0.3, 1.35, 0.55);
+  g.rotateZ(-0.3);
+  g.translate(-0.04, 0.2, 0);
+  return g;
+}
+
+function knightEar(mirror: 1 | -1) {
+  const g = new THREE.ConeGeometry(0.04, 0.19, 14);
+  g.rotateZ(-0.16);
+  g.rotateX(mirror * 0.32);
+  g.translate(0.09, 0.56, mirror * 0.075);
   return g;
 }
 
@@ -179,22 +188,14 @@ const geos = {
   kingBar: mark(new THREE.BoxGeometry(0.18, 0.055, 0.055), 1.5),
   knightBase: knightBase(),
   knightCollar: mark(new THREE.TorusGeometry(0.165, 0.018, 28, 48), 0.175),
-  knightHead: knightHead(),
-  knightEarL: (() => {
-    const g = new THREE.ConeGeometry(0.042, 0.17, 14);
-    g.rotateZ(0.3);
-    g.rotateX(-0.24);
-    g.translate(-0.08, 0.8, 0.06);
-    return g;
-  })(),
-  knightEarR: (() => {
-    const g = new THREE.ConeGeometry(0.042, 0.17, 14);
-    g.rotateZ(0.16);
-    g.rotateX(0.3);
-    g.translate(-0.05, 0.795, -0.06);
-    return g;
-  })(),
-  knightEye: new THREE.SphereGeometry(0.024, 16, 10),
+  knightNeck: knightNeck(),
+  knightCranium: knightCranium(),
+  knightMuzzle: knightMuzzle(),
+  knightJaw: knightJaw(),
+  knightMane: knightMane(),
+  knightEarL: knightEar(1),
+  knightEarR: knightEar(-1),
+  knightEye: new THREE.SphereGeometry(0.02, 14, 10),
   // Slightly tapered prism (not a flat-sided cube) for a more finished,
   // deliberately-crafted crenellation instead of a plain blocky box.
   rookMerlon: (() => {
@@ -308,14 +309,20 @@ export function createPieceMesh(type: PieceType, side: Side, mats: PieceMaterial
     g.add(mesh(geos.knightBase, mats.body));
     g.add(mesh(geos.knightCollar, mats.accent));
     const headGroup = new THREE.Group();
-    headGroup.add(mesh(geos.knightHead, mats.body));
+    headGroup.add(mesh(geos.knightNeck, mats.body));
+    headGroup.add(mesh(geos.knightCranium, mats.body));
+    headGroup.add(mesh(geos.knightMuzzle, mats.body));
+    headGroup.add(mesh(geos.knightJaw, mats.body));
+    headGroup.add(mesh(geos.knightMane, mats.accent));
     headGroup.add(mesh(geos.knightEarL, mats.body));
     headGroup.add(mesh(geos.knightEarR, mats.body));
-    const eye = mesh(geos.knightEye, mats.accent);
-    eye.position.set(0.07, 0.6, 0.11);
-    headGroup.add(eye);
+    const eyeL = mesh(geos.knightEye, mats.accent);
+    eyeL.position.set(0.26, 0.45, 0.095);
+    headGroup.add(eyeL);
+    const eyeR = mesh(geos.knightEye, mats.accent);
+    eyeR.position.set(0.26, 0.45, -0.095);
+    headGroup.add(eyeR);
     headGroup.position.set(0, 0.35, 0);
-    headGroup.rotation.y = Math.PI / 2;
     g.add(headGroup);
   }
 
