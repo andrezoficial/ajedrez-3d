@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ContactShadows, OrbitControls } from "@react-three/drei";
+import { Billboard, ContactShadows, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { fileOf, rankOf, squareIndex, type PieceCode, type PieceType, type Side } from "./chess";
@@ -35,6 +35,26 @@ function markPointerMove(clientX: number, clientY: number) {
 }
 
 function noRaycast() {}
+
+/** Soft round sprite texture (radial gradient) shared by particles and glows,
+ * built once lazily — much prettier than three.js's default square points. */
+let _softDot: THREE.CanvasTexture | null = null;
+function getSoftDotTexture() {
+  if (_softDot) return _softDot;
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  grad.addColorStop(0, "rgba(255,255,255,1)");
+  grad.addColorStop(0.35, "rgba(255,255,255,0.55)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  _softDot = new THREE.CanvasTexture(canvas);
+  return _softDot;
+}
 
 function makeStoneTexture(base: string, vein: string) {
   const c = document.createElement("canvas");
@@ -263,11 +283,11 @@ function Lighting({ skin, turn, phase }: { skin: Skin; turn: Side; phase: "sun" 
         decay={2}
       />
 
-      {/* Volumetric light shafts */}
+      {/* Soft volumetric light shafts — subtle studio haze, not dramatic god-rays */}
       <LightShaft
         position={warm ? [6.5, 11, 5] : [-5.5, 10, -4]}
         color={keyColor}
-        intensity={warm ? 0.7 : 0.55}
+        intensity={warm ? 0.4 : 0.32}
         length={14}
         radius={2.4}
         angle={0.28}
@@ -275,7 +295,7 @@ function Lighting({ skin, turn, phase }: { skin: Skin; turn: Side; phase: "sun" 
       <LightShaft
         position={warm ? [-3, 9, 7] : [4, 8.5, -6]}
         color={fillColor}
-        intensity={0.35}
+        intensity={0.2}
         length={11}
         radius={1.6}
         angle={0.4}
@@ -712,44 +732,145 @@ function Highlights() {
   );
 }
 
-function Stars() {
+/** Professional studio backdrop — a rich vertical gradient sky (like a
+ * golden-hour / twilight cove) instead of a literal skybox texture, so it
+ * always reads as elegant and cinematic regardless of camera angle. */
+function StudioBackdrop({ warm }: { warm: boolean }) {
+  const uniforms = useMemo(
+    () => ({
+      colorTop: { value: new THREE.Color(warm ? "#241a2c" : "#080a16") },
+      colorMid: { value: new THREE.Color(warm ? "#5a3a2e" : "#161c34") },
+      colorBottom: { value: new THREE.Color(warm ? "#e8a24a" : "#2a3a5c") },
+    }),
+    [warm],
+  );
+
+  useEffect(() => {
+    uniforms.colorTop.value.set(warm ? "#241a2c" : "#080a16");
+    uniforms.colorMid.value.set(warm ? "#5a3a2e" : "#161c34");
+    uniforms.colorBottom.value.set(warm ? "#e8a24a" : "#2a3a5c");
+  }, [warm, uniforms]);
+
+  return (
+    <mesh raycast={noRaycast}>
+      <sphereGeometry args={[50, 32, 32]} />
+      <shaderMaterial
+        side={THREE.BackSide}
+        depthWrite={false}
+        fog={false}
+        uniforms={uniforms}
+        vertexShader={`
+          varying vec3 vPos;
+          void main() {
+            vPos = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `}
+        fragmentShader={`
+          varying vec3 vPos;
+          uniform vec3 colorTop;
+          uniform vec3 colorMid;
+          uniform vec3 colorBottom;
+          void main() {
+            float h = normalize(vPos).y;
+            vec3 col = h > 0.08
+              ? mix(colorMid, colorTop, smoothstep(0.08, 0.85, h))
+              : mix(colorBottom, colorMid, smoothstep(-0.35, 0.08, h));
+            gl_FragColor = vec4(col, 1.0);
+          }
+        `}
+      />
+    </mesh>
+  );
+}
+
+/** Glowing sun / moon disc with a soft layered corona — the focal point of
+ * the sky, always facing the camera. */
+function CelestialGlow({ warm }: { warm: boolean }) {
+  const tex = useMemo(() => getSoftDotTexture(), []);
+  const coreColor = warm ? "#fff2c8" : "#dfe8ff";
+  const haloColor = warm ? "#ffb85c" : "#8fb0ff";
+  const outerColor = warm ? "#ff8a3c" : "#5a7ad0";
+  const pos: [number, number, number] = warm ? [-14, 13, -30] : [16, 15, -32];
+
+  return (
+    <group position={pos}>
+      <Billboard>
+        <mesh raycast={noRaycast} scale={16}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial
+            map={tex}
+            color={outerColor}
+            transparent
+            opacity={0.35}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+        <mesh raycast={noRaycast} scale={7.5}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial
+            map={tex}
+            color={haloColor}
+            transparent
+            opacity={0.55}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+        <mesh raycast={noRaycast} scale={2.6}>
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial
+            map={tex}
+            color={coreColor}
+            transparent
+            opacity={1}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      </Billboard>
+    </group>
+  );
+}
+
+/** Slow-drifting bokeh particles for depth and atmosphere — soft round
+ * sprites (not square dots), sparse and elegant rather than a starfield. */
+function AmbientBokeh({ warm }: { warm: boolean }) {
   const ref = useRef<THREE.Points>(null);
+  const tex = useMemo(() => getSoftDotTexture(), []);
   const geo = useMemo(() => {
-    const count = 1400;
+    const count = 220;
     const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    const c = new THREE.Color();
+    const sizes = new Float32Array(count);
     for (let i = 0; i < count; i++) {
-      const r = 18 + Math.random() * 48;
+      const r = 6 + Math.random() * 26;
       const t = Math.random() * Math.PI * 2;
-      const p = Math.acos(2 * Math.random() - 1);
-      positions[i * 3] = r * Math.sin(p) * Math.cos(t);
-      positions[i * 3 + 1] = Math.abs(r * Math.cos(p)) * 0.7 + 1.5;
-      positions[i * 3 + 2] = r * Math.sin(p) * Math.sin(t);
-      // Subtle color variation: cool white / soft gold / pale blue
-      const roll = Math.random();
-      if (roll < 0.12) c.set("#ffe8b0");
-      else if (roll < 0.28) c.set("#b8d4ff");
-      else c.set("#ffffff");
-      colors[i * 3] = c.r;
-      colors[i * 3 + 1] = c.g;
-      colors[i * 3 + 2] = c.b;
+      positions[i * 3] = Math.cos(t) * r;
+      positions[i * 3 + 1] = 1 + Math.random() * 14;
+      positions[i * 3 + 2] = Math.sin(t) * r;
+      sizes[i] = 0.3 + Math.random() * 0.9;
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    g.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
     return g;
   }, []);
-  useFrame((_, d) => {
-    if (ref.current) ref.current.rotation.y += d * 0.0045;
+
+  useFrame((state) => {
+    if (!ref.current) return;
+    ref.current.rotation.y = state.clock.elapsedTime * 0.01;
+    ref.current.position.y = Math.sin(state.clock.elapsedTime * 0.12) * 0.3;
   });
+
   return (
     <points ref={ref} geometry={geo} raycast={noRaycast}>
       <pointsMaterial
-        vertexColors
-        size={0.085}
+        map={tex}
+        color={warm ? "#ffd9a0" : "#c8d8ff"}
+        size={0.5}
         transparent
-        opacity={0.85}
+        opacity={0.4}
         sizeAttenuation
         depthWrite={false}
         blending={THREE.AdditiveBlending}
@@ -758,52 +879,39 @@ function Stars() {
   );
 }
 
-/** Distant planet / eclipse body for depth and rim light */
-function CosmicBackdrop({ warm }: { warm: boolean }) {
-  const planetRef = useRef<THREE.Mesh>(null);
-  useFrame((state) => {
-    if (planetRef.current) {
-      planetRef.current.rotation.y = state.clock.elapsedTime * 0.008;
-    }
-  });
+/** Thin glowing line where the floor meets the sky — the classic
+ * infinity-cove horizon glow that makes a studio backdrop feel premium. */
+function HorizonGlow({ warm }: { warm: boolean }) {
+  const color = warm ? "#ffb15a" : "#5a7ad0";
   return (
-    <group position={[18, 8, -28]}>
-      {/* Main planet body */}
-      <mesh ref={planetRef} raycast={noRaycast}>
-        <sphereGeometry args={[9.5, 48, 48]} />
-        <meshStandardMaterial
-          color={warm ? "#1a2a48" : "#0e1628"}
-          emissive={warm ? "#0a1830" : "#060c18"}
-          emissiveIntensity={0.4}
-          roughness={0.85}
-          metalness={0.1}
-        />
-      </mesh>
-      {/* Soft atmospheric rim */}
-      <mesh scale={1.045} raycast={noRaycast}>
-        <sphereGeometry args={[9.5, 32, 32]} />
-        <meshBasicMaterial
-          color={warm ? "#4a7ab8" : "#3a5a98"}
-          transparent
-          opacity={0.18}
-          side={THREE.BackSide}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
-      {/* Subtle glow halo */}
-      <mesh scale={1.12} raycast={noRaycast}>
-        <sphereGeometry args={[9.5, 24, 24]} />
-        <meshBasicMaterial
-          color={warm ? "#6a9ad0" : "#5070b0"}
-          transparent
-          opacity={0.07}
-          side={THREE.BackSide}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
-    </group>
+    <mesh position={[0, -1.15, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={noRaycast}>
+      <ringGeometry args={[8, 42, 64]} />
+      <meshBasicMaterial
+        color={color}
+        transparent
+        opacity={0.14}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
+
+/** Large studio floor beneath the board — a soft satin finish that picks up
+ * gentle environment reflections instead of a flat matte void. */
+function StudioFloor({ warm }: { warm: boolean }) {
+  const color = warm ? "#241a12" : "#131826";
+  return (
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, -1.22, 0]}
+      receiveShadow
+      raycast={noRaycast}
+    >
+      <circleGeometry args={[42, 64]} />
+      <meshStandardMaterial color={color} roughness={0.5} metalness={0.25} envMapIntensity={0.8} />
+    </mesh>
   );
 }
 
@@ -834,9 +942,9 @@ function SceneRig() {
   const { scene } = useThree();
 
   useEffect(() => {
-    // Deep space exponential fog — softer near the board, denser in the distance
-    const fogColor = warm ? 0x0a0806 : 0x06080f;
-    scene.fog = new THREE.FogExp2(fogColor, 0.018);
+    // Neutral studio fog — softer near the board, blends into the gradient cove
+    const fogColor = warm ? 0x241e17 : 0x141926;
+    scene.fog = new THREE.FogExp2(fogColor, 0.02);
     return () => {
       scene.fog = null;
     };
@@ -851,8 +959,11 @@ function SceneRig() {
       <ForceCamera />
       <StudioEnvironment />
       <Lighting skin={skin} turn={turn} phase={phase} />
-      <Stars />
-      <CosmicBackdrop warm={warm} />
+      <StudioBackdrop warm={warm} />
+      <StudioFloor warm={warm} />
+      <CelestialGlow warm={warm} />
+      <AmbientBokeh warm={warm} />
+      <HorizonGlow warm={warm} />
       {/* Static rotation — only flips 180° for the opposing player's view, no idle sway */}
       <group rotation={[0, flipped ? Math.PI : 0, 0]}>
         <Board skin={skin} />
@@ -906,7 +1017,7 @@ export function ChessCanvas() {
         useGame.setState({ selected: null, legal: [] });
       }}
     >
-      <color attach="background" args={["#050508"]} />
+      <color attach="background" args={["#1a1522"]} />
       <SceneRig />
     </Canvas>
   );

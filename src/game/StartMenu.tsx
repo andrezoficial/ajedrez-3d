@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Sun, Moon, Users, Wifi, Bot, ArrowLeft } from "lucide-react";
+import { Sun, Moon, Users, Wifi, Bot, ArrowLeft, Instagram } from "lucide-react";
 import { useGame } from "./store";
 
 type Panel = "root" | "ai" | "online";
@@ -137,9 +137,15 @@ export function StartMenu() {
           </div>
         )}
 
-        <p className="mt-10 text-center font-[family-name:var(--font-signature)] text-lg text-fg-subtle">
+        <a
+          href="https://www.instagram.com/andres.suarez.moreno"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-10 flex items-center justify-center gap-1.5 text-center font-[family-name:var(--font-signature)] text-lg text-fg-subtle transition-colors hover:text-fg"
+        >
+          <Instagram className="size-4 shrink-0" strokeWidth={1.75} />
           creado por Andres Suarez Moreno · @andres.suarez.moreno
-        </p>
+        </a>
       </div>
     </div>
   );
