@@ -1,23 +1,50 @@
-import { Settings, RotateCcw, Sparkles, Volume2, VolumeX, Sun, Moon, Copy, Check, Home } from "lucide-react";
+import {
+  Settings,
+  RotateCcw,
+  Plus,
+  Volume2,
+  VolumeX,
+  Sun,
+  Moon,
+  Copy,
+  Check,
+  House,
+} from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { getGameStatus, getCurrentPhase, getPhaseTurnsLeft, materialOf, type Side } from "./chess";
+import {
+  capturedPieces,
+  getGameStatus,
+  getCurrentPhase,
+  getPhaseTurnsLeft,
+  lastMoveLabel,
+  materialDelta,
+  opponentColor,
+  type PieceType,
+  type Side,
+} from "./chess";
+import { PieceGlyph } from "./PieceGlyph";
 import { SKINS, type SkinId } from "./skins";
 import { useGame, type Mode } from "./store";
 import type { OnlineStatus } from "./online";
+import { Board2D } from "./Board2D";
+import { Btn, Field, Modal, Segmented, SwitchRow } from "./ui";
+import { cn } from "@/lib/utils";
 
-export function GameHUD() {
+export function PlayScreen() {
   const state = useGame((s) => s.state);
   const mode = useGame((s) => s.mode);
   const difficulty = useGame((s) => s.difficulty);
-  const skin = useGame((s) => s.skin);
+  const skinId = useGame((s) => s.skin);
   const audio = useGame((s) => s.audio);
   const phases = useGame((s) => s.phases);
   const thinking = useGame((s) => s.thinking);
   const toast = useGame((s) => s.toast);
   const selected = useGame((s) => s.selected);
+  const pendingPromotion = useGame((s) => s.pendingPromotion);
   const onlineRoom = useGame((s) => s.onlineRoom);
   const onlineColor = useGame((s) => s.onlineColor);
   const onlineStatus = useGame((s) => s.onlineStatus);
+  const flipped = useGame((s) => s.flipped);
   const setMode = useGame((s) => s.setMode);
   const setDifficulty = useGame((s) => s.setDifficulty);
   const setSkin = useGame((s) => s.setSkin);
@@ -28,264 +55,228 @@ export function GameHUD() {
   const startOnlineHost = useGame((s) => s.startOnlineHost);
   const joinOnlineRoom = useGame((s) => s.joinOnlineRoom);
   const returnToMenu = useGame((s) => s.returnToMenu);
-  const [open, setOpen] = useState(false);
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [confirmNew, setConfirmNew] = useState(false);
   const [uiMode, setUiMode] = useState<Mode>(mode);
   const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
 
-  // Only follow the store's mode while not mid-setup for online (the select
-  // itself drives "online" locally until Host/Join actually connects).
   useEffect(() => {
     if (mode !== "online") setUiMode(mode);
   }, [mode]);
 
   const status = getGameStatus(state);
-  const sunMat = materialOf(state.board, "w");
-  const moonMat = materialOf(state.board, "b");
-  const round = Math.floor(state.halfmove / 2) + 1;
+  const skin = SKINS[skinId];
   const phase = phases ? getCurrentPhase() : null;
-  const sunActive = state.turn === "w" && !status.isOver;
-  const moonActive = state.turn === "b" && !status.isOver;
-  const onlineLabel =
-    onlineStatus === "connected"
-      ? "En línea"
-      : onlineStatus === "waiting"
-        ? "Esperando…"
-        : onlineStatus === "connecting"
-          ? "Conectando…"
-          : onlineStatus === "disconnected"
-            ? "Desconectado"
-            : "En línea";
+  const topSide: Side = flipped ? "w" : "b";
+  const bottomSide: Side = flipped ? "b" : "w";
+  const moveLabel = lastMoveLabel(state);
 
-  let message = "Elige una pieza";
+  let message = "Toca una pieza";
   if (mode === "online" && onlineStatus !== "connected") {
     message =
       onlineStatus === "waiting"
-        ? "Esperando al rival…"
+        ? "Esperando al rival"
         : onlineStatus === "disconnected"
           ? "Rival desconectado"
-          : "Conectando…";
+          : "Conectando";
   } else if (status.isOver) message = status.result;
-  else if (mode === "ai" && thinking) message = "La Luna piensa…";
+  else if (pendingPromotion) message = "Elige la coronación";
+  else if (mode === "ai" && thinking) message = "La Luna piensa";
   else if (status.inCheck) message = state.turn === "w" ? "Jaque al Sol" : "Jaque a la Luna";
   else if (mode === "online" && state.turn !== onlineColor) message = "Turno del rival";
   else if (selected !== null) message = "Elige el destino";
+  else if (moveLabel) message = `${moveLabel} · ${state.turn === "w" ? "Sol" : "Luna"}`;
+
+  const requestNewGame = () => {
+    if (state.halfmove > 0 && !status.isOver) setConfirmNew(true);
+    else newGame();
+  };
 
   return (
-    <>
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-4">
-        <PlayerBadge
-          name="Sol Invictus"
-          tag="LUZ"
-          material={sunMat}
-          active={sunActive}
-          faction="sol"
-          icon={<Sun className="size-4" strokeWidth={1.75} />}
-        />
-        <div className="min-w-0 pt-1 text-center">
-          <p className="font-sans text-[10px] font-medium tracking-[0.22em] text-fg-subtle uppercase">
-            Sol y Luna
-          </p>
-          <h1 className="font-display text-lg leading-tight font-semibold tracking-tight text-fg sm:text-2xl">
-            Ajedrez 3D
+    <div className="relative flex h-dvh w-full flex-col">
+      <header className="flex shrink-0 items-center justify-between gap-3 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-1 sm:px-4">
+        <IconBtn label="Menú" onClick={returnToMenu}>
+          <House className="size-4" strokeWidth={1.7} />
+        </IconBtn>
+        <div className="min-w-0 text-center">
+          <p className="text-micro font-medium tracking-[0.24em] text-fg-subtle uppercase">Sol y Luna</p>
+          <h1 className="font-display text-lg leading-tight font-semibold tracking-tight text-fg sm:text-xl">
+            Eclipse Eterno
           </h1>
-          <p className="mt-0.5 font-sans text-[11px] text-fg-muted">
-            {status.isOver
-              ? status.result
-              : thinking
-                ? "Turno de la Luna"
-                : `Turno del ${state.turn === "w" ? "Sol" : "Luna"}`}
-            {status.inCheck && !status.isOver ? " · Jaque" : ""}
-          </p>
         </div>
-        <PlayerBadge
-          name="Luna Noir"
-          tag={mode === "ai" ? "IA" : mode === "online" ? onlineLabel.toUpperCase() : "SOMBRA"}
-          material={moonMat}
-          active={moonActive}
-          faction="luna"
-          icon={<Moon className="size-4" strokeWidth={1.75} />}
-          reverse
-        />
+        <IconBtn label="Ajustes" onClick={() => setSettingsOpen(true)}>
+          <Settings className="size-4" strokeWidth={1.7} />
+        </IconBtn>
       </header>
 
-      <div className="pointer-events-none absolute top-[5.5rem] left-1/2 z-10 flex -translate-x-1/2 gap-2 sm:top-[6.25rem]">
-        <Pill>Tablero astral</Pill>
-        <Pill>Ronda {round}</Pill>
-      </div>
-
-      {toast && !status.isOver && (
-        <div className="pointer-events-none absolute bottom-28 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border bg-bg-elevated px-4 py-2 font-sans text-xs text-fg sm:bottom-24">
-          {toast}
-        </div>
-      )}
-
       {phase && (
-        <div className="pointer-events-none absolute right-3 bottom-28 z-10 flex items-center gap-2 rounded-xl border border-border bg-bg-elevated/90 px-3 py-2 sm:bottom-24">
-          {phase === "sun" ? (
-            <Sun className="size-4 text-sol" strokeWidth={1.75} />
-          ) : (
-            <Moon className="size-4 text-luna" strokeWidth={1.75} />
-          )}
-          <div>
-            <p className="font-sans text-[11px] font-medium text-fg">
-              {phase === "sun" ? "Mediodía solar" : "Luna creciente"}
-            </p>
-            <p className="font-sans text-[10px] text-fg-subtle">
-              {getPhaseTurnsLeft()} {getPhaseTurnsLeft() === 1 ? "turno" : "turnos"}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {status.isOver && (
-        <div className="absolute inset-0 z-20 grid place-items-center bg-bg/55 px-4">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-bg-elevated p-6 text-center shadow-[0_24px_80px_rgb(0_0_0/0.45)]">
-            <p className="font-sans text-[10px] tracking-[0.2em] text-fg-subtle uppercase">Partida terminada</p>
-            <p className="font-display mt-1 text-2xl font-semibold text-fg">{status.result}</p>
-            <button
-              type="button"
-              onClick={newGame}
-              className="mt-5 h-11 w-full rounded-md bg-accent text-sm font-medium text-accent-fg"
-            >
-              Nueva partida
-            </button>
-          </div>
-        </div>
-      )}
-
-      {mode === "online" && (onlineStatus === "connecting" || onlineStatus === "waiting") && (
-        <div className="absolute inset-0 z-20 grid place-items-center bg-bg/70 px-4">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-bg-elevated p-6 text-center shadow-[0_24px_80px_rgb(0_0_0/0.45)]">
-            <p className="font-sans text-[10px] tracking-[0.2em] text-fg-subtle uppercase">
-              {onlineStatus === "connecting" ? "Conectando" : "Sala creada"}
-            </p>
-            {onlineRoom && (
-              <>
-                <p className="font-display mt-2 text-4xl font-semibold tracking-[0.35em] text-fg">
-                  {onlineRoom}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(onlineRoom).then(() => {
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1500);
-                    });
-                  }}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border bg-bg px-3 py-1.5 font-sans text-xs text-fg-muted"
-                >
-                  {copied ? (
-                    <Check className="size-3.5" strokeWidth={1.75} />
-                  ) : (
-                    <Copy className="size-3.5" strokeWidth={1.75} />
-                  )}
-                  {copied ? "Copiado" : "Copiar código"}
-                </button>
-              </>
+        <div className="flex justify-center pb-1">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-bg-elevated px-2.5 py-1 text-2xs text-fg-muted">
+            {phase === "sun" ? (
+              <Sun className="size-3 text-sol" strokeWidth={1.75} />
+            ) : (
+              <Moon className="size-3 text-luna" strokeWidth={1.75} />
             )}
-            <p className="mt-4 font-sans text-xs text-fg-muted">
-              {onlineStatus === "connecting"
-                ? "Buscando la sala…"
-                : "Comparte el código para que tu rival se una."}
-            </p>
-            <button
-              type="button"
-              onClick={returnToMenu}
-              className="mt-5 h-10 w-full rounded-md border border-border bg-bg text-sm text-fg-muted"
-            >
-              Cancelar
-            </button>
+            {phase === "sun" ? "Mediodía solar" : "Luna creciente"}
+            <span className="text-fg-subtle tabular-nums">
+              · {getPhaseTurnsLeft()} {getPhaseTurnsLeft() === 1 ? "turno" : "turnos"}
+            </span>
           </div>
         </div>
       )}
 
-      <footer className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
-        <div className="mx-auto flex w-full max-w-xl items-center gap-2">
-          <Chip>
-            <span className="size-1.5 rounded-full bg-sol" />
-            Sol <strong className="font-medium text-fg tabular-nums">{sunMat}</strong>
-          </Chip>
-          <Chip className="min-w-0 flex-1 justify-center">
-            <span className="truncate text-center">
-              {state.halfmove === 0 && !status.isOver
-                ? "Arrastra para orbitar · toca una pieza"
-                : message}
-            </span>
-          </Chip>
-          <Chip>
-            <span className="size-1.5 rounded-full bg-luna" />
-            Luna <strong className="font-medium text-fg tabular-nums">{moonMat}</strong>
-          </Chip>
-        </div>
-        <nav className="pointer-events-auto mx-auto flex items-center gap-2">
-          <IconBtn label="Menú" onClick={returnToMenu}>
-            <Home className="size-4" strokeWidth={1.75} />
+      <PlayerRail
+        side={topSide}
+        mode={mode}
+        onlineColor={onlineColor}
+        onlineStatus={onlineStatus}
+        thinking={thinking && topSide === "b"}
+        active={state.turn === topSide && !status.isOver}
+      />
+
+      <Board2D />
+
+      <PlayerRail
+        side={bottomSide}
+        mode={mode}
+        onlineColor={onlineColor}
+        onlineStatus={onlineStatus}
+        thinking={thinking && bottomSide === "b"}
+        active={state.turn === bottomSide && !status.isOver}
+      />
+
+      <footer className="flex shrink-0 flex-col items-center gap-2 px-3 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
+        <p
+          aria-live="polite"
+          className="min-h-5 max-w-sm truncate text-center text-xs text-fg-muted"
+        >
+          {toast && !status.isOver ? toast : message}
+        </p>
+        <nav className="flex items-center gap-2">
+          <IconBtn label="Nueva" onClick={requestNewGame} primary caption>
+            <Plus className="size-4" strokeWidth={1.7} />
           </IconBtn>
-          <IconBtn label="Ajustes" onClick={() => setOpen(true)}>
-            <Settings className="size-4" strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn label="Nueva partida" primary onClick={newGame}>
-            <Sparkles className="size-4" strokeWidth={1.75} />
-          </IconBtn>
-          <IconBtn label="Girar tablero" onClick={flipBoard}>
-            <RotateCcw className="size-4" strokeWidth={1.75} />
+          <IconBtn label="Girar" onClick={flipBoard} caption>
+            <RotateCcw className="size-4" strokeWidth={1.7} />
           </IconBtn>
         </nav>
       </footer>
 
-      {open && (
-        <div className="absolute inset-0 z-30">
-          <button
-            type="button"
-            aria-label="Cerrar ajustes"
-            className="absolute inset-0 bg-bg/70"
-            onClick={() => setOpen(false)}
-          />
-          <aside className="absolute top-1/2 right-3 w-[min(22rem,calc(100%-1.5rem))] -translate-y-1/2 rounded-xl border border-border bg-bg-elevated p-5 shadow-[0_24px_80px_rgb(0_0_0/0.45)]">
-            <div className="mb-4 flex items-start justify-between">
-              <div>
-                <p className="font-sans text-[10px] tracking-[0.2em] text-fg-subtle uppercase">
-                  Ajedrez 3D
-                </p>
-                <h2 className="font-display text-2xl font-semibold text-fg">Ajustes</h2>
+      {status.isOver && (
+        <Modal kicker="Partida terminada" title={status.result}>
+          <div className="mb-5 flex justify-center">
+            {status.winner === "w" ? (
+              <Sun className="size-10 text-sol" strokeWidth={1.4} />
+            ) : status.winner === "b" ? (
+              <Moon className="size-10 text-luna" strokeWidth={1.4} />
+            ) : (
+              <div className="flex gap-2 text-fg-muted">
+                <Sun className="size-8" strokeWidth={1.4} />
+                <Moon className="size-8" strokeWidth={1.4} />
               </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Btn className="w-full" onClick={newGame}>
+              Revancha
+            </Btn>
+            <Btn variant="secondary" className="w-full" onClick={returnToMenu}>
+              Volver al menú
+            </Btn>
+          </div>
+        </Modal>
+      )}
+
+      {mode === "online" && (onlineStatus === "connecting" || onlineStatus === "waiting") && (
+        <Modal
+          kicker={onlineStatus === "connecting" ? "En línea" : "Sala lista"}
+          title={onlineStatus === "connecting" ? "Buscando la sala" : "Comparte el código"}
+          onClose={returnToMenu}
+        >
+          {onlineRoom && (
+            <>
+              <p className="mb-3 text-center font-mono text-3xl font-semibold tracking-[0.28em] text-fg">
+                {onlineRoom}
+              </p>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
-                className="grid size-8 place-items-center rounded-sm bg-bg-subtle text-lg text-fg-muted"
+                onClick={() => {
+                  navigator.clipboard?.writeText(onlineRoom).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                  });
+                }}
+                className="mb-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-bg text-sm text-fg-muted transition-colors duration-150 hover:text-fg"
               >
-                ×
+                {copied ? <Check className="size-4" strokeWidth={1.75} /> : <Copy className="size-4" strokeWidth={1.75} />}
+                {copied ? "Código copiado" : "Copiar código"}
               </button>
-            </div>
+            </>
+          )}
+          <p className="mb-5 text-center text-xs leading-relaxed text-fg-muted">
+            {onlineStatus === "connecting"
+              ? "Un segundo…"
+              : "Tu rival necesita este código para unirse."}
+          </p>
+          <Btn variant="secondary" className="w-full" onClick={returnToMenu}>
+            Cancelar
+          </Btn>
+        </Modal>
+      )}
 
-            <div className="space-y-3 rounded-lg border border-border bg-bg-subtle/50 p-3">
+      {confirmNew && (
+        <Modal kicker="Partida en curso" title="¿Empezar de nuevo?" onClose={() => setConfirmNew(false)}>
+          <p className="mb-5 text-sm leading-relaxed text-fg-muted">
+            Se perderá el progreso de esta partida.
+          </p>
+          <div className="flex flex-col gap-2">
+            <Btn
+              className="w-full"
+              onClick={() => {
+                setConfirmNew(false);
+                newGame();
+              }}
+            >
+              Nueva partida
+            </Btn>
+            <Btn variant="ghost" className="w-full" onClick={() => setConfirmNew(false)}>
+              Seguir jugando
+            </Btn>
+          </div>
+        </Modal>
+      )}
+
+      {settingsOpen && (
+        <Modal kicker="Eclipse Eterno" title="Ajustes" onClose={() => setSettingsOpen(false)} wide>
+          <div className="space-y-3">
+            <div className="space-y-3 rounded-lg bg-bg p-3 shadow-border">
               <Field label="Modo de partida">
-                <select
+                <Segmented
                   value={uiMode}
-                  onChange={(e) => {
-                    const next = e.target.value as Mode;
+                  onChange={(next) => {
                     setUiMode(next);
                     if (next !== "online") setMode(next);
                   }}
-                  className="mt-1.5 h-11 w-full rounded-md border border-border bg-bg px-3 text-sm text-fg outline-none"
-                >
-                  <option value="ai">Contra la IA</option>
-                  <option value="pvp">Dos jugadores</option>
-                  <option value="online">En línea</option>
-                </select>
+                  options={[
+                    { value: "ai", label: "IA" },
+                    { value: "pvp", label: "Local" },
+                    { value: "online", label: "En línea" },
+                  ]}
+                />
               </Field>
               {uiMode === "ai" && (
                 <Field label="Dificultad">
-                  <select
+                  <Segmented
                     value={difficulty}
-                    onChange={(e) => setDifficulty(Number(e.target.value))}
-                    className="mt-1.5 h-11 w-full rounded-md border border-border bg-bg px-3 text-sm text-fg outline-none"
-                  >
-                    <option value={1}>Fácil</option>
-                    <option value={2}>Media</option>
-                    <option value={3}>Difícil</option>
-                  </select>
+                    onChange={setDifficulty}
+                    options={[
+                      { value: 1, label: "Fácil" },
+                      { value: 2, label: "Media" },
+                      { value: 3, label: "Difícil" },
+                    ]}
+                  />
                 </Field>
               )}
               {uiMode === "online" && (
@@ -297,9 +288,7 @@ export function GameHUD() {
                   joinCode={joinCode}
                   setJoinCode={setJoinCode}
                   copied={copied}
-                  onHost={() => {
-                    startOnlineHost();
-                  }}
+                  onHost={() => startOnlineHost()}
                   onJoin={() => {
                     if (joinCode.trim()) joinOnlineRoom(joinCode);
                   }}
@@ -318,64 +307,149 @@ export function GameHUD() {
               )}
             </div>
 
-            <div className="mt-3 space-y-3 rounded-lg border border-border bg-bg-subtle/50 p-3">
-              <Field label="Estética">
-                <select
-                  value={skin}
-                  onChange={(e) => setSkin(e.target.value as SkinId)}
-                  className="mt-1.5 h-11 w-full rounded-md border border-border bg-bg px-3 text-sm text-fg outline-none"
-                >
+            <div className="space-y-3 rounded-lg bg-bg p-3 shadow-border">
+              <Field label="Tablero">
+                <div className="grid grid-cols-3 gap-2">
                   {Object.values(SKINS).map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSkin(s.id as SkinId)}
+                      className={cn(
+                        "overflow-hidden rounded-md text-left transition-[box-shadow] duration-150",
+                        skinId === s.id ? "shadow-[0_0_0_2px_var(--color-accent)]" : "shadow-border",
+                      )}
+                    >
+                      <span className="grid h-8 grid-cols-4">
+                        {Array.from({ length: 8 }, (_, i) => (
+                          <span
+                            key={i}
+                            style={{
+                              background: ((i % 4) + Math.floor(i / 4)) % 2 === 0 ? s.tileLight : s.tileDark,
+                            }}
+                          />
+                        ))}
+                      </span>
+                      <span className="block truncate px-1.5 py-1.5 text-micro leading-tight text-fg-muted">
+                        {s.label}
+                      </span>
+                    </button>
                   ))}
-                </select>
+                </div>
               </Field>
-              <SwitchRow
-                label="Fases lunares"
-                checked={phases}
-                onChange={setPhases}
-              />
+              <SwitchRow label="Fases lunares" checked={phases} onChange={setPhases} />
               <SwitchRow
                 label="Sonido"
                 checked={audio}
                 onChange={setAudio}
                 icon={
-                  audio ? (
-                    <Volume2 className="size-3.5" />
-                  ) : (
-                    <VolumeX className="size-3.5" />
-                  )
+                  audio ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />
                 }
               />
             </div>
 
-            <p className="mt-3 font-sans text-[11px] leading-relaxed text-fg-subtle">
-              La luz solar favorece al Sol. La sombra lunar favorece a la Luna.
+            <p className="text-xs leading-relaxed text-fg-subtle">
+              Con fases activas, la luz solar favorece al Sol y la sombra lunar a la Luna.
             </p>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="mt-4 h-11 w-full rounded-md bg-accent text-sm font-medium text-accent-fg"
-            >
+            <Btn className="w-full" onClick={() => setSettingsOpen(false)}>
               Listo
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                returnToMenu();
-              }}
-              className="mt-3 w-full text-center font-sans text-[11px] text-fg-subtle hover:text-fg-muted"
-            >
-              Volver al menú principal
-            </button>
-          </aside>
-        </div>
+            </Btn>
+          </div>
+        </Modal>
       )}
-    </>
+    </div>
   );
+}
+
+function PlayerRail({
+  side,
+  mode,
+  onlineColor,
+  onlineStatus,
+  thinking,
+  active,
+}: {
+  side: Side;
+  mode: Mode;
+  onlineColor: Side | null;
+  onlineStatus: OnlineStatus;
+  thinking: boolean;
+  active: boolean;
+}) {
+  const board = useGame((s) => s.state.board);
+  const skin = SKINS[useGame((s) => s.skin)];
+  const captured = capturedPieces(board, opponentColor(side));
+  const delta = materialDelta(board, side);
+  const isSol = side === "w";
+  const name = isSol ? "Sol Invictus" : "Luna Noir";
+  const short = isSol ? "Sol" : "Luna";
+  const tag = playerTag(side, mode, onlineColor, onlineStatus);
+
+  return (
+    <div
+      className={cn(
+        "mx-auto flex w-full max-w-xl shrink-0 items-center gap-2.5 px-3 py-1.5 sm:px-4",
+        "transition-opacity duration-200 ease-out",
+        active ? "opacity-100" : "opacity-55",
+      )}
+    >
+      <div
+        className={cn(
+          "relative grid size-10 shrink-0 place-items-center rounded-full",
+          isSol ? "bg-sol text-accent-fg" : "bg-luna text-accent-fg",
+        )}
+      >
+        {isSol ? <Sun className="size-4" strokeWidth={1.7} /> : <Moon className="size-4" strokeWidth={1.7} />}
+        {active && (
+          <span className="turn-dot absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full bg-accent shadow-[0_0_0_2px_var(--color-bg)]" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <p className="truncate text-sm font-medium tracking-wide text-fg">
+            <span className="sm:hidden">{short}</span>
+            <span className="hidden sm:inline">{name}</span>
+          </p>
+          <p className="shrink-0 text-micro tracking-[0.14em] text-fg-subtle uppercase">{tag}</p>
+        </div>
+        <div className="mt-0.5 flex min-h-4 items-center gap-0.5">
+          {captured.map((type, i) => (
+              <PieceGlyph
+                key={`${type}-${i}`}
+                type={type as PieceType}
+                side={opponentColor(side)}
+                skin={skin}
+                className="size-4"
+              />
+            ))}
+        </div>
+      </div>
+      <p
+        className={cn(
+          "shrink-0 font-mono text-sm tabular-nums",
+          thinking ? "shimmer-text" : delta > 0 ? (isSol ? "text-sol" : "text-luna") : "text-fg-subtle",
+        )}
+      >
+        {thinking ? "…" : delta > 0 ? `+${delta}` : ""}
+      </p>
+    </div>
+  );
+}
+
+function playerTag(
+  side: Side,
+  mode: Mode,
+  onlineColor: Side | null,
+  onlineStatus: OnlineStatus,
+): string {
+  if (mode === "ai") return side === "w" ? "Tú" : "IA";
+  if (mode === "online") {
+    if (onlineColor === side) return "Tú";
+    if (onlineStatus === "connected") return "Rival";
+    if (onlineStatus === "waiting") return "Espera";
+    return "En línea";
+  }
+  return side === "w" ? "Luz" : "Sombra";
 }
 
 function OnlinePanel({
@@ -405,35 +479,21 @@ function OnlinePanel({
 }) {
   if (!connected) {
     return (
-      <div className="space-y-2 rounded-lg border border-border bg-bg p-3">
-        <button
-          type="button"
-          onClick={onHost}
-          className="h-10 w-full rounded-md bg-accent text-sm font-medium text-accent-fg"
-        >
+      <div className="space-y-2">
+        <Btn className="w-full" onClick={onHost}>
           Crear sala
-        </button>
-        <div className="flex items-center gap-1 px-1">
-          <span className="h-px flex-1 bg-border" />
-          <span className="font-sans text-[10px] tracking-wide text-fg-subtle uppercase">o</span>
-          <span className="h-px flex-1 bg-border" />
-        </div>
+        </Btn>
         <div className="flex gap-2">
           <input
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
             placeholder="Código de sala"
             maxLength={6}
-            className="h-10 min-w-0 flex-1 rounded-md border border-border bg-bg-subtle px-3 font-mono text-sm tracking-[0.2em] text-fg outline-none placeholder:font-sans placeholder:tracking-normal placeholder:text-fg-subtle"
+            className="h-11 min-w-0 flex-1 rounded-md border border-border bg-bg-elevated px-3 font-mono text-sm tracking-[0.22em] text-fg outline-none placeholder:font-sans placeholder:tracking-normal placeholder:text-fg-subtle"
           />
-          <button
-            type="button"
-            disabled={!joinCode.trim()}
-            onClick={onJoin}
-            className="h-10 shrink-0 rounded-md border border-border-strong bg-bg-elevated px-4 text-sm font-medium text-fg disabled:opacity-40"
-          >
+          <Btn variant="secondary" disabled={!joinCode.trim()} onClick={onJoin} className="shrink-0">
             Unirse
-          </button>
+          </Btn>
         </div>
       </div>
     );
@@ -443,108 +503,33 @@ function OnlinePanel({
     onlineStatus === "connected"
       ? "Rival conectado"
       : onlineStatus === "waiting"
-        ? "Esperando al rival…"
+        ? "Esperando al rival"
         : onlineStatus === "disconnected"
           ? "Rival desconectado"
-          : "Conectando…";
+          : "Conectando";
 
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-bg p-3">
-      <div>
-        <p className="font-sans text-[11px] text-fg-muted">Código de sala — compártelo</p>
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <p className="font-mono text-2xl font-semibold tracking-[0.35em] text-fg">{onlineRoom}</p>
-          <button
-            type="button"
-            onClick={onCopy}
-            aria-label="Copiar código"
-            className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-bg-elevated text-fg-muted"
-          >
-            {copied ? <Check className="size-4" strokeWidth={1.75} /> : <Copy className="size-4" strokeWidth={1.75} />}
-          </button>
-        </div>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-mono text-2xl font-semibold tracking-[0.28em] text-fg">{onlineRoom}</p>
+        <button
+          type="button"
+          onClick={onCopy}
+          aria-label="Copiar código"
+          className="grid size-11 shrink-0 place-items-center rounded-md border border-border text-fg-muted"
+        >
+          {copied ? <Check className="size-4" strokeWidth={1.75} /> : <Copy className="size-4" strokeWidth={1.75} />}
+        </button>
       </div>
-      <p className="flex items-center gap-2 font-sans text-[11px] text-fg-muted">
+      <p className="flex items-center gap-2 text-xs text-fg-muted">
         <span
-          className={[
-            "size-1.5 rounded-full",
-            onlineStatus === "connected" ? "bg-accent" : "bg-fg-subtle",
-          ].join(" ")}
+          className={cn("size-1.5 rounded-full", onlineStatus === "connected" ? "bg-ok" : "bg-fg-subtle")}
         />
-        {statusLabel} · juegas con el {onlineColor === "w" ? "Sol" : "Luna"}
+        {statusLabel} · {onlineColor === "w" ? "Sol" : "Luna"}
       </p>
-      <button
-        type="button"
-        onClick={onLeave}
-        className="h-9 w-full rounded-md border border-border bg-bg-elevated text-xs text-fg-muted"
-      >
+      <Btn variant="secondary" className="h-10 w-full text-xs" onClick={onLeave}>
         Salir de la sala
-      </button>
-    </div>
-  );
-}
-
-function PlayerBadge({
-  name,
-  tag,
-  material,
-  active,
-  faction,
-  icon,
-  reverse,
-}: {
-  name: string;
-  tag: string;
-  material: number;
-  active: boolean;
-  faction: "sol" | "luna";
-  icon: ReactNode;
-  reverse?: boolean;
-}) {
-  return (
-    <div
-      className={[
-        "pointer-events-auto flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 transition-opacity duration-200 sm:min-w-[7.5rem]",
-        reverse ? "flex-row-reverse" : "",
-        active ? "border-border-strong bg-bg-elevated/90 opacity-100" : "border-border bg-bg-elevated/70 opacity-55",
-      ].join(" ")}
-    >
-      <div
-        className={[
-          "grid size-9 place-items-center rounded-full",
-          faction === "sol" ? "bg-sol text-accent-fg" : "bg-luna text-accent-fg",
-        ].join(" ")}
-      >
-        {icon}
-      </div>
-      <div className={reverse ? "text-right" : ""}>
-        <p className="hidden font-sans text-[11px] font-medium tracking-wide text-fg uppercase sm:block">{name}</p>
-        <p className="font-sans text-[11px] font-medium tracking-wide text-fg uppercase sm:hidden">
-          {faction === "sol" ? "Sol" : "Luna"}
-        </p>
-        <p className="font-mono text-[9px] text-fg-subtle">{tag}</p>
-        <p className={["font-sans text-[10px] tabular-nums", faction === "sol" ? "text-sol" : "text-luna"].join(" ")}>
-          {material}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function Pill({ children }: { children: ReactNode }) {
-  return (
-    <span className="rounded-full border border-border bg-bg-elevated/80 px-2.5 py-1 font-sans text-[10px] tracking-[0.14em] text-fg-muted uppercase">
-      {children}
-    </span>
-  );
-}
-
-function Chip({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return (
-    <div
-      className={`flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated/85 px-2.5 py-1.5 font-sans text-[10px] text-fg-muted ${className}`}
-    >
-      {children}
+      </Btn>
     </div>
   );
 }
@@ -554,73 +539,34 @@ function IconBtn({
   label,
   onClick,
   primary,
+  caption,
 }: {
   children: ReactNode;
   label: string;
   onClick: () => void;
   primary?: boolean;
+  caption?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={[
-        "flex h-12 min-w-16 flex-col items-center justify-center gap-0.5 rounded-lg border px-3",
+      className={cn(
+        "flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border",
+        "transition-[background-color,transform] duration-150 ease-out",
+        "active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+        caption ? "h-12 min-w-14 px-3" : "size-11",
         primary
-          ? "border-border-strong bg-accent text-accent-fg"
-          : "border-border bg-bg-elevated text-fg",
-      ].join(" ")}
+          ? "border-transparent bg-accent text-accent-fg"
+          : "border-border bg-bg-elevated text-fg shadow-border",
+      )}
+      aria-label={label}
+      title={label}
     >
       {children}
-      <span className="font-sans text-[9px] tracking-wide uppercase opacity-70">{label}</span>
+      {caption && (
+        <span className="text-micro font-medium tracking-wide uppercase opacity-70">{label}</span>
+      )}
     </button>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block font-sans text-[11px] text-fg-muted">
-      {label}
-      {children}
-    </label>
-  );
-}
-
-function SwitchRow({
-  label,
-  checked,
-  onChange,
-  icon,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  icon?: ReactNode;
-}) {
-  return (
-    <label className="flex h-10 items-center justify-between gap-3 font-sans text-[12px] text-fg">
-      <span className="flex items-center gap-2">
-        {icon}
-        {label}
-      </span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={[
-          "relative h-5 w-9 rounded-full transition-colors duration-150",
-          checked ? "bg-accent" : "bg-bg",
-        ].join(" ")}
-      >
-        <i
-          className={[
-            "absolute top-0.5 size-4 rounded-full bg-fg transition-transform duration-150",
-            checked ? "left-4" : "left-0.5",
-            checked ? "bg-accent-fg" : "bg-fg-muted",
-          ].join(" ")}
-        />
-      </button>
-    </label>
   );
 }

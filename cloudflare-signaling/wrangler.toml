@@ -1,0 +1,16 @@
+name = "eclipse-eterno-rtc"
+main = "src/worker.ts"
+compatibility_date = "2024-11-01"
+
+# Uncomment and set this to your Vercel domain to lock the relay down to your
+# app only (comma-separate multiple origins). Defaults to "*" (any origin).
+# [vars]
+# ALLOWED_ORIGIN = "https://tu-app.vercel.app"
+
+[[durable_objects.bindings]]
+name = "RTC_ROOM"
+class_name = "RtcRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RtcRoom"]

@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { Sun, Moon, Users, Wifi, Bot, ArrowLeft, Instagram } from "lucide-react";
+import { Users, Wifi, Bot, ArrowLeft, Instagram, ChevronRight, Sun, Moon } from "lucide-react";
 import { useGame } from "./store";
+import { Btn, Segmented } from "./ui";
+import { cn } from "@/lib/utils";
 
 type Panel = "root" | "ai" | "online";
 
@@ -15,124 +17,117 @@ export function StartMenu() {
   const joinOnlineRoom = useGame((s) => s.joinOnlineRoom);
 
   return (
-    <div className="absolute inset-0 z-40 overflow-y-auto bg-[radial-gradient(circle_at_50%_15%,rgb(196_165_116/0.16),transparent_55%),radial-gradient(circle_at_50%_100%,rgb(168_176_196/0.14),transparent_55%)] bg-bg">
-      <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-5 py-12">
-        <div className="mb-10 text-center">
-          <div className="mb-4 flex items-center justify-center gap-3">
-            <Sun className="size-7 text-sol" strokeWidth={1.5} />
-            <Moon className="size-7 text-luna" strokeWidth={1.5} />
-          </div>
-          <p className="font-sans text-[10px] font-medium tracking-[0.32em] text-fg-subtle uppercase">
+    <div className="salon-grid absolute inset-0 z-40 overflow-y-auto">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_50%_0%,rgb(196_165_116/0.12),transparent_70%)]" />
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pt-14 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:justify-center sm:pt-10">
+        <header className="stagger-in mb-10 text-center">
+          <BrandMark />
+          <p className="mt-5 text-micro font-medium tracking-[0.32em] text-fg-subtle uppercase">
             Sol y Luna
           </p>
-          <h1 className="font-display text-4xl leading-tight font-semibold tracking-tight text-fg">
-            Ajedrez 3D
+          <h1 className="font-display mt-1 text-4xl leading-none font-semibold tracking-tight text-fg sm:text-5xl">
+            Eclipse Eterno
           </h1>
-          <p className="mt-2 font-sans text-[13px] text-fg-muted">
-            El Sol y la Luna se disputan el tablero astral.
+          <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-fg-muted">
+            Ajedrez de salón. Vista cenital, reglas completas, IA y partidas en línea.
           </p>
-        </div>
+        </header>
 
         {panel === "root" && (
-          <div className="space-y-3">
+          <div className="stagger-in space-y-2.5">
             <MenuCard
-              icon={<Bot className="size-5" strokeWidth={1.75} />}
+              icon={<Bot className="size-5" strokeWidth={1.6} />}
               title="Contra la IA"
-              description="Elige la dificultad y enfréntate a la Luna."
+              description="Tres niveles. Juegas con el Sol."
               onClick={() => setPanel("ai")}
+              trailing
             />
             <MenuCard
-              icon={<Users className="size-5" strokeWidth={1.75} />}
+              icon={<Users className="size-5" strokeWidth={1.6} />}
               title="Dos jugadores"
-              description="Turnos alternos en el mismo dispositivo."
+              description="Turnos en el mismo dispositivo."
               onClick={() => startLocalGame("pvp")}
             />
             <MenuCard
-              icon={<Wifi className="size-5" strokeWidth={1.75} />}
+              icon={<Wifi className="size-5" strokeWidth={1.6} />}
               title="En línea"
               description="Crea una sala o únete con un código."
               onClick={() => setPanel("online")}
+              trailing
             />
           </div>
         )}
 
         {panel === "ai" && (
-          <div className="space-y-5 rounded-xl border border-border bg-bg-elevated p-5">
+          <div className="space-y-5 rounded-xl border border-border bg-bg-elevated p-5 shadow-border">
             <BackRow onBack={() => setPanel("root")} label="Contra la IA" />
             <div>
-              <p className="mb-2 font-sans text-[11px] tracking-[0.14em] text-fg-subtle uppercase">
+              <p className="mb-2 text-micro font-medium tracking-[0.16em] text-fg-subtle uppercase">
                 Dificultad
               </p>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { n: 1, label: "Fácil" },
-                  { n: 2, label: "Media" },
-                  { n: 3, label: "Difícil" },
-                ].map((d) => (
-                  <button
-                    key={d.n}
-                    type="button"
-                    onClick={() => setAiDifficulty(d.n)}
-                    className={[
-                      "h-11 rounded-md border font-sans text-sm transition-colors",
-                      aiDifficulty === d.n
-                        ? "border-border-strong bg-accent text-accent-fg"
-                        : "border-border bg-bg text-fg-muted",
-                    ].join(" ")}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                value={aiDifficulty}
+                onChange={setAiDifficulty}
+                options={[
+                  { value: 1, label: "Fácil" },
+                  { value: 2, label: "Media" },
+                  { value: 3, label: "Difícil" },
+                ]}
+              />
+              <p className="mt-2.5 text-xs leading-relaxed text-fg-subtle">
+                {aiDifficulty === 1 && "La Luna comete errores y juega más corto."}
+                {aiDifficulty === 2 && "Juego sólido, suficiente para una partida seria."}
+                {aiDifficulty === 3 && "Busca más profundo. Exige precisión."}
+              </p>
             </div>
-            <button
-              type="button"
+            <Btn
+              className="w-full"
               onClick={() => {
                 setDifficulty(aiDifficulty);
                 startLocalGame("ai");
               }}
-              className="h-11 w-full rounded-md bg-accent text-sm font-medium text-accent-fg"
             >
               Jugar contra la IA
-            </button>
+            </Btn>
           </div>
         )}
 
         {panel === "online" && (
-          <div className="space-y-4 rounded-xl border border-border bg-bg-elevated p-5">
+          <div className="space-y-4 rounded-xl border border-border bg-bg-elevated p-5 shadow-border">
             <BackRow onBack={() => setPanel("root")} label="En línea" />
-            <button
-              type="button"
-              onClick={() => startOnlineHost()}
-              className="h-11 w-full rounded-md bg-accent text-sm font-medium text-accent-fg"
-            >
+            <Btn className="w-full" onClick={() => startOnlineHost()}>
               Crear sala
-            </button>
-            <div className="flex items-center gap-2 px-1">
+            </Btn>
+            <div className="flex items-center gap-3 px-1">
               <span className="h-px flex-1 bg-border" />
-              <span className="font-sans text-[10px] tracking-wide text-fg-subtle uppercase">o</span>
+              <span className="text-micro tracking-[0.18em] text-fg-subtle uppercase">o</span>
               <span className="h-px flex-1 bg-border" />
             </div>
             <div className="flex gap-2">
               <input
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                placeholder="Código de sala"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && joinCode.trim()) joinOnlineRoom(joinCode);
+                }}
+                placeholder="Código"
                 maxLength={6}
                 autoCapitalize="characters"
-                className="h-11 min-w-0 flex-1 rounded-md border border-border bg-bg px-3 font-mono text-sm tracking-[0.2em] text-fg outline-none placeholder:font-sans placeholder:tracking-normal placeholder:text-fg-subtle"
+                autoComplete="off"
+                spellCheck={false}
+                className="h-11 min-w-0 flex-1 rounded-md border border-border bg-bg px-3 font-mono text-sm tracking-[0.28em] text-fg outline-none placeholder:font-sans placeholder:tracking-normal placeholder:text-fg-subtle focus-visible:border-border-strong"
               />
-              <button
-                type="button"
+              <Btn
+                variant="secondary"
                 disabled={!joinCode.trim()}
                 onClick={() => joinOnlineRoom(joinCode)}
-                className="h-11 shrink-0 rounded-md border border-border-strong bg-bg px-4 text-sm font-medium text-fg disabled:opacity-40"
+                className="shrink-0 px-4"
               >
                 Unirse
-              </button>
+              </Btn>
             </div>
-            <p className="font-sans text-[11px] leading-relaxed text-fg-subtle">
-              Pide a tu rival el código de su sala, o crea una y compártelo con él.
+            <p className="text-xs leading-relaxed text-fg-subtle">
+              Crea una sala y comparte el código, o introdúcelo para unirte a la de tu rival.
             </p>
           </div>
         )}
@@ -141,12 +136,27 @@ export function StartMenu() {
           href="https://www.instagram.com/andres.suarez.moreno"
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-10 flex items-center justify-center gap-1.5 text-center font-[family-name:var(--font-signature)] text-lg text-fg-subtle transition-colors hover:text-fg"
+          className="mt-10 flex items-center justify-center gap-2 text-center text-xs text-fg-subtle transition-colors duration-150 hover:text-fg"
         >
-          <Instagram className="size-4 shrink-0" strokeWidth={1.75} />
-          creado por Andres Suarez Moreno · @andres.suarez.moreno
+          <Instagram className="size-3.5 shrink-0" strokeWidth={1.75} />
+          Andres Suarez Moreno
         </a>
       </div>
+    </div>
+  );
+}
+
+function BrandMark() {
+  return (
+    <div className="mx-auto flex items-center justify-center gap-3" aria-hidden>
+      <Sun className="size-4 text-sol" strokeWidth={1.5} />
+      <div className="grid size-12 grid-cols-8 overflow-hidden rounded-sm shadow-border">
+        {Array.from({ length: 64 }, (_, i) => {
+          const light = ((i % 8) + Math.floor(i / 8)) % 2 === 0;
+          return <span key={i} className={light ? "bg-sol" : "bg-bg"} />;
+        })}
+      </div>
+      <Moon className="size-4 text-luna" strokeWidth={1.5} />
     </div>
   );
 }
@@ -156,41 +166,49 @@ function MenuCard({
   title,
   description,
   onClick,
+  trailing,
 }: {
   icon: ReactNode;
   title: string;
   description: string;
   onClick: () => void;
+  trailing?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-xl border border-border bg-bg-elevated p-4 text-left transition-colors hover:border-border-strong hover:bg-bg-subtle"
+      className={cn(
+        "flex w-full items-center gap-3 rounded-xl border border-border bg-bg-elevated p-4 text-left shadow-border",
+        "transition-[background-color,box-shadow] duration-150 ease-out",
+        "hover:bg-bg-subtle hover:shadow-border-hover",
+        "active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+      )}
     >
-      <div className="grid size-11 shrink-0 place-items-center rounded-full bg-bg-subtle text-fg">
+      <div className="grid size-11 shrink-0 place-items-center rounded-sm bg-bg-subtle text-fg">
         {icon}
       </div>
-      <div className="min-w-0">
-        <p className="font-sans text-sm font-medium text-fg">{title}</p>
-        <p className="mt-0.5 font-sans text-[11px] text-fg-muted">{description}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-fg">{title}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-fg-muted">{description}</p>
       </div>
+      {trailing && <ChevronRight className="size-4 shrink-0 text-fg-subtle" strokeWidth={1.75} />}
     </button>
   );
 }
 
 function BackRow({ onBack, label }: { onBack: () => void; label: string }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-2">
       <button
         type="button"
         onClick={onBack}
         aria-label="Volver"
-        className="grid size-7 place-items-center rounded-full border border-border bg-bg text-fg-muted"
+        className="grid size-11 place-items-center rounded-full border border-border bg-bg text-fg-muted transition-colors duration-150 hover:text-fg"
       >
-        <ArrowLeft className="size-3.5" strokeWidth={1.75} />
+        <ArrowLeft className="size-4" strokeWidth={1.75} />
       </button>
-      <p className="font-sans text-[11px] tracking-[0.14em] text-fg-subtle uppercase">{label}</p>
+      <p className="text-xs font-medium tracking-[0.16em] text-fg-subtle uppercase">{label}</p>
     </div>
   );
 }

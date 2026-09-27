@@ -10,6 +10,7 @@ import {
   getLegalMoves,
   type GameState,
   type Move,
+  type PieceType,
   type Side,
   resetEclipse,
   setPhasesEnabled,
@@ -35,6 +36,8 @@ type Store = {
   state: GameState;
   selected: number | null;
   legal: Move[];
+  pendingPromotion: Move | null;
+  gameId: number;
   mode: Mode;
   difficulty: number;
   skin: SkinId;
@@ -50,6 +53,8 @@ type Store = {
   selectSquare: (sq: number) => void;
   playMove: (move: Move) => void;
   applyRemoteMove: (move: Move) => void;
+  choosePromotion: (piece: PieceType) => void;
+  cancelPromotion: () => void;
   newGame: () => void;
   setMode: (mode: "ai" | "pvp") => void;
   setDifficulty: (n: number) => void;
@@ -74,13 +79,17 @@ function scheduleToast(set: (p: Partial<Store>) => void, message: string) {
   toastTimer = setTimeout(() => set({ toast: null }), 1600);
 }
 
+let gameSeq = 0;
+
 function freshGameProps() {
   return {
     state: createInitialState(),
     selected: null,
     legal: [],
+    pendingPromotion: null,
     thinking: false,
     lastCapture: null,
+    gameId: ++gameSeq,
   } satisfies Partial<Store>;
 }
 
@@ -122,7 +131,10 @@ function commitMove(get: () => Store, set: (p: Partial<Store>) => void, move: Mo
     capturedSide = before[move.to]![0] as Side;
   }
 
-  const next = applyMove(state, move.isPromotion ? { ...move, promotionPiece: "Q" } : move);
+  const next = applyMove(
+    state,
+    move.isPromotion ? { ...move, promotionPiece: move.promotionPiece ?? "Q" } : move,
+  );
   advanceEclipse();
   const status = getGameStatus(next);
   playMoveSound();
@@ -134,21 +146,15 @@ function commitMove(get: () => Store, set: (p: Partial<Store>) => void, move: Mo
     state: next,
     selected: null,
     legal: [],
+    pendingPromotion: null,
     lastCapture:
       capturedSquare !== null && capturedSide
         ? { square: capturedSquare, side: capturedSide }
         : null,
   });
-  scheduleToast(
-    set,
-    status.isOver
-      ? status.result
-      : capturedSide
-        ? "Captura · energía liberada"
-        : status.inCheck
-          ? "Jaque"
-          : "Movimiento ejecutado",
-  );
+  if (status.isOver) scheduleToast(set, status.result);
+  else if (capturedSide) scheduleToast(set, "Captura");
+  else if (status.inCheck) scheduleToast(set, "Jaque");
 }
 
 function setupOnlineGame(
@@ -161,8 +167,6 @@ function setupOnlineGame(
   onlineGame = new OnlineGame(room, {
     onStatusChange: (status) => {
       set({ onlineStatus: status });
-      // The host is the source of truth for a peer that just joined: push the
-      // current board so a rejoin (or a slow initial connect) always syncs.
       if (status === "connected" && get().onlineColor === "w") {
         onlineGame?.send({ type: "sync", state: get().state, phases: get().phases });
       }
@@ -172,7 +176,13 @@ function setupOnlineGame(
         get().applyRemoteMove(message.move);
       } else if (message.type === "sync") {
         setPhasesEnabled(message.phases);
-        set({ state: message.state, phases: message.phases, selected: null, legal: [] });
+        set({
+          state: message.state,
+          phases: message.phases,
+          selected: null,
+          legal: [],
+          pendingPromotion: null,
+        });
       } else if (message.type === "newGame") {
         resetEclipse();
         set(freshGameProps());
@@ -198,6 +208,8 @@ export const useGame = create<Store>((set, get) => ({
   state: createInitialState(),
   selected: null,
   legal: [],
+  pendingPromotion: null,
+  gameId: 0,
   mode: "ai",
   difficulty: 2,
   skin: "gold_silver",
@@ -213,15 +225,24 @@ export const useGame = create<Store>((set, get) => ({
 
   selectSquare: (sq) => {
     unlockAudio();
-    const { state, selected, legal, mode, thinking, onlineColor, onlineStatus } = get();
+    const { state, selected, legal, mode, thinking, onlineColor, onlineStatus, pendingPromotion } =
+      get();
     const status = getGameStatus(state);
     if (status.isOver || thinking) return;
     if (mode === "ai" && state.turn === "b") return;
     if (mode === "online" && (onlineStatus !== "connected" || state.turn !== onlineColor)) return;
 
+    if (pendingPromotion) {
+      get().cancelPromotion();
+    }
+
     if (selected !== null) {
       const move = legal.find((m) => m.to === sq);
       if (move) {
+        if (move.isPromotion) {
+          set({ pendingPromotion: move, selected: move.from, legal: [] });
+          return;
+        }
         get().playMove(move);
         return;
       }
@@ -230,9 +251,9 @@ export const useGame = create<Store>((set, get) => ({
     const piece = state.board[sq];
     if (piece && piece[0] === state.turn) {
       playSelectSound();
-      set({ selected: sq, legal: getLegalMoves(state, sq) });
+      set({ selected: sq, legal: getLegalMoves(state, sq), pendingPromotion: null });
     } else {
-      set({ selected: null, legal: [] });
+      set({ selected: null, legal: [], pendingPromotion: null });
     }
   },
 
@@ -242,9 +263,25 @@ export const useGame = create<Store>((set, get) => ({
     triggerAi(get, set);
   },
 
-  // Applied when the move arrives from the remote peer — no re-broadcast, no AI.
   applyRemoteMove: (move) => {
     commitMove(get, set, move);
+  },
+
+  choosePromotion: (piece) => {
+    const pending = get().pendingPromotion;
+    if (!pending) return;
+    get().playMove({ ...pending, isPromotion: true, promotionPiece: piece });
+  },
+
+  cancelPromotion: () => {
+    const pending = get().pendingPromotion;
+    if (!pending) return;
+    const { state } = get();
+    set({
+      pendingPromotion: null,
+      selected: pending.from,
+      legal: getLegalMoves(state, pending.from),
+    });
   },
 
   newGame: () => {
@@ -283,6 +320,7 @@ export const useGame = create<Store>((set, get) => ({
       onlineRoom: null,
       onlineColor: null,
       onlineStatus: "idle",
+      flipped: false,
     });
   },
   startOnlineHost: () => {
@@ -303,6 +341,7 @@ export const useGame = create<Store>((set, get) => ({
       onlineRoom: null,
       onlineColor: null,
       onlineStatus: "idle",
+      flipped: false,
     });
   },
 }));

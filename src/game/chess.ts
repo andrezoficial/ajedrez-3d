@@ -562,3 +562,31 @@ export function materialOf(board: (PieceCode | null)[], color: Side) {
   }
   return total;
 }
+
+const STARTING_COUNT: Record<PieceType, number> = { K: 1, Q: 1, R: 2, B: 2, N: 2, P: 8 };
+const CAPTURE_ORDER: PieceType[] = ["Q", "R", "B", "N", "P"];
+
+export function capturedPieces(board: (PieceCode | null)[], capturedOf: Side): PieceType[] {
+  const remaining: Record<PieceType, number> = { K: 0, Q: 0, R: 0, B: 0, N: 0, P: 0 };
+  for (const p of board) {
+    if (p && p[0] === capturedOf) remaining[p[1] as PieceType]++;
+  }
+  const out: PieceType[] = [];
+  for (const t of CAPTURE_ORDER) {
+    const n = Math.max(0, STARTING_COUNT[t] - remaining[t]);
+    for (let i = 0; i < n; i++) out.push(t);
+  }
+  return out;
+}
+
+export function materialDelta(board: (PieceCode | null)[], side: Side): number {
+  return side === "w"
+    ? materialOf(board, "w") - materialOf(board, "b")
+    : materialOf(board, "b") - materialOf(board, "w");
+}
+
+export function lastMoveLabel(state: GameState): string | null {
+  if (!state.lastMove) return null;
+  return `${squareName(state.lastMove.from)}–${squareName(state.lastMove.to)}`;
+}
+

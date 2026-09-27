@@ -49,9 +49,7 @@ export class OnlineGame {
   connect(): void {
     this.callbacks.onStatusChange("connecting");
     this.p2p = new P2PRoom({
-      // Namespaced so this game's rooms never collide with another app on
-      // the same signaling relay / room-code space.
-      room: `ajedrez3d-eclipse-eterno-${this.room}`,
+      room: `ajedrez2d-eclipse-eterno-${this.room}`,
       selfId: this.selfId,
       name: "Jugador",
       onConnected: () => {

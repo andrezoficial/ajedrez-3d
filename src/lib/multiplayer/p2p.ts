@@ -74,6 +74,13 @@ interface PeerSlot {
   pingSentAt?: number;
 }
 
+/**
+ * Signaling relay base URL. Defaults to the same-origin /api/rtc route; set
+ * VITE_RTC_URL to point at an external relay instead (e.g. a Cloudflare
+ * Worker — see cloudflare-signaling/ at the repo root).
+ */
+const RTC_URL = (import.meta.env.VITE_RTC_URL as string | undefined)?.trim() || "/api/rtc";
+
 const FAST_POLL_MS = 400;
 const IDLE_POLL_MS = 2000;
 const PING_INTERVAL_MS = 2000;
@@ -138,7 +145,7 @@ export class P2PRoom {
     this.peers.clear();
     // Leaving the roster is the teardown broadcast: everyone's next poll
     // drops this peer and closes their side of the pair.
-    void fetch("/api/rtc", {
+    void fetch(RTC_URL, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ op: "leave", room: this.opts.room, peer: this.opts.selfId }),
@@ -192,7 +199,7 @@ export class P2PRoom {
       name: this.opts.name ?? "",
       since: String(this.cursor),
     });
-    const res = await fetch(`/api/rtc?${params}`);
+    const res = await fetch(`${RTC_URL}?${params}`);
     if (this.closed) return;
     if (!res.ok) throw new Error(`signaling poll failed: ${res.status}`);
     const body = (await res.json()) as RtcPollResponse;
@@ -448,7 +455,7 @@ export class P2PRoom {
     for (let attempt = 0; ; attempt++) {
       if (this.closed) return;
       try {
-        const res = await fetch("/api/rtc", {
+        const res = await fetch(RTC_URL, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
