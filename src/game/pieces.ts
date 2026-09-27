@@ -113,58 +113,56 @@ function knightBase() {
   ]);
 }
 
-/** The knight head is built from solid 3D volumes (neck, cranium, muzzle,
- * jaw, ears) instead of a flat extruded profile. A flat profile only reads
- * as a horse from the one exact side angle it was drawn for — from the
- * board's tilted-down camera you mostly see its thin edge, which is why it
- * used to look like a shapeless blob. Real volume reads correctly from any
- * angle. "Forward" (the nose direction) is +X; the two ears/eyes split
- * across +Z/-Z. */
+/** The knight head+muzzle+jaw is ONE seamless lathe — the same technique
+ * used for every other piece's body — instead of separate primitives glued
+ * together. Gluing a sphere to a cone to another sphere always leaves
+ * visible seams where they only touch tangentially (that's what made the
+ * previous version look crooked/assembled-wrong). A lathe revolved around
+ * the *forward* axis instead of the vertical one gives a single continuous
+ * torpedo-like volume: wide through the jaw/cranium, tapering to a rounded
+ * nose at the front and to a hidden point embedded inside the neck at the
+ * back. "Forward" (the nose direction) is +X; ears/eyes split across
+ * +Z/-Z. */
+function knightHead() {
+  const profile: [number, number][] = [
+    [0.0, 0.0], // nose tip
+    [0.05, 0.03],
+    [0.082, 0.07],
+    [0.11, 0.13],
+    [0.134, 0.19],
+    [0.154, 0.25], // jaw, widening
+    [0.163, 0.3], // cranium, the widest point
+    [0.143, 0.35],
+    [0.088, 0.39],
+    [0.0, 0.4], // tapers to a point, buried inside the neck
+  ];
+  const g = lathe(profile, 28);
+  g.rotateZ(Math.PI / 2); // revolve axis Y -> X, so it points forward
+  g.translate(0.48, 0.3, 0);
+  return g;
+}
+
 function knightNeck() {
-  const g = new THREE.CylinderGeometry(0.105, 0.15, 0.34, 24, 1);
-  g.translate(0, 0.17, 0); // base at the local origin, top at y=0.34
-  g.rotateZ(-0.3); // lean the top forward, arching toward the head
-  return g;
-}
-
-function knightCranium() {
-  const g = new THREE.SphereGeometry(0.145, 26, 20);
-  g.scale(1.05, 0.95, 0.8); // slightly elongated, a touch flattened side-to-side
-  g.translate(0.16, 0.43, 0);
-  return g;
-}
-
-function knightMuzzle() {
-  // Tapered tube: wide end (0.105) attaches at the cranium, narrow end
-  // (0.04) is the nose tip.
-  const g = new THREE.CylinderGeometry(0.04, 0.105, 0.34, 22, 1);
-  g.rotateZ(-Math.PI / 2); // swing the cylinder's axis to point forward (+X)
-  g.translate(0.47, 0.4, 0);
-  return g;
-}
-
-function knightJaw() {
-  const g = new THREE.SphereGeometry(0.09, 18, 14);
-  g.scale(1.15, 0.62, 0.85);
-  g.translate(0.24, 0.31, 0);
+  const g = new THREE.CylinderGeometry(0.1, 0.15, 0.3, 24, 1);
+  g.translate(0, 0.15, 0); // base at the local origin, top at y=0.3
+  g.rotateZ(-0.28); // lean the top forward, arching toward the head
   return g;
 }
 
 function knightMane() {
   // A thin fin along the crest of the neck — just enough to suggest a mane
   // without turning into visual clutter on a small piece.
-  const g = new THREE.SphereGeometry(0.1, 18, 12);
-  g.scale(0.3, 1.35, 0.55);
-  g.rotateZ(-0.3);
-  g.translate(-0.04, 0.2, 0);
+  const g = new THREE.SphereGeometry(0.09, 16, 12);
+  g.scale(0.25, 1.2, 0.4);
+  g.rotateZ(-0.28);
+  g.translate(0.0, 0.17, 0);
   return g;
 }
 
 function knightEar(mirror: 1 | -1) {
-  const g = new THREE.ConeGeometry(0.04, 0.19, 14);
-  g.rotateZ(-0.16);
-  g.rotateX(mirror * 0.32);
-  g.translate(0.09, 0.56, mirror * 0.075);
+  const g = new THREE.ConeGeometry(0.05, 0.19, 14);
+  g.rotateX(mirror * 0.38); // splay outward, away from the centerline
+  g.translate(0.15, 0.44, mirror * 0.075);
   return g;
 }
 
@@ -189,9 +187,7 @@ const geos = {
   knightBase: knightBase(),
   knightCollar: mark(new THREE.TorusGeometry(0.165, 0.018, 28, 48), 0.175),
   knightNeck: knightNeck(),
-  knightCranium: knightCranium(),
-  knightMuzzle: knightMuzzle(),
-  knightJaw: knightJaw(),
+  knightHead: knightHead(),
   knightMane: knightMane(),
   knightEarL: knightEar(1),
   knightEarR: knightEar(-1),
@@ -310,17 +306,15 @@ export function createPieceMesh(type: PieceType, side: Side, mats: PieceMaterial
     g.add(mesh(geos.knightCollar, mats.accent));
     const headGroup = new THREE.Group();
     headGroup.add(mesh(geos.knightNeck, mats.body));
-    headGroup.add(mesh(geos.knightCranium, mats.body));
-    headGroup.add(mesh(geos.knightMuzzle, mats.body));
-    headGroup.add(mesh(geos.knightJaw, mats.body));
+    headGroup.add(mesh(geos.knightHead, mats.body));
     headGroup.add(mesh(geos.knightMane, mats.accent));
     headGroup.add(mesh(geos.knightEarL, mats.body));
     headGroup.add(mesh(geos.knightEarR, mats.body));
     const eyeL = mesh(geos.knightEye, mats.accent);
-    eyeL.position.set(0.26, 0.45, 0.095);
+    eyeL.position.set(0.24, 0.36, 0.12);
     headGroup.add(eyeL);
     const eyeR = mesh(geos.knightEye, mats.accent);
-    eyeR.position.set(0.26, 0.45, -0.095);
+    eyeR.position.set(0.24, 0.36, -0.12);
     headGroup.add(eyeR);
     headGroup.position.set(0, 0.35, 0);
     g.add(headGroup);
